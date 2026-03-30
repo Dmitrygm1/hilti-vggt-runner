@@ -1,0 +1,4 @@
+vggt_root: /home/drudshin/projects/VGGT-SLAM
+hilti_repo_root: /home/drudshin/projects/hilti-trimble-slam-challenge-2026
+data_root: /home/drudshin/data/hilti-2026
+outputs_root: /home/drudshin/outputs/hilti-vggt
