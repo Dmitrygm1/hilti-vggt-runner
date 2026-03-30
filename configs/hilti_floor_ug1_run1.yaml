@@ -1,0 +1,22 @@
+run_name: floor_UG1_2025-06-18_run_1
+source_mp4: ${HOME}/data/hilti-2026/raw/floor_UG1/2025-06-18/run_1/floor_UG1_2025-06-18_run_1.mp4
+
+extraction:
+  sample_fps: 3.0
+  jpeg_quality: 95
+  rotate_180: true
+  smoke_frame_count: 96
+
+vggt:
+  submap_size: 16
+  overlapping_window_size: 1
+  max_loops: 1
+  min_disparity: 50.0
+  conf_threshold: 25.0
+  lc_thres: 0.95
+  vis_voxel_size:
+
+export:
+  voxel_size: 0.02
+  nb_neighbors: 20
+  std_ratio: 2.0

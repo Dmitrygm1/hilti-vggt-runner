@@ -20,3 +20,4 @@ cache/
 *.pcd
 *.las
 *.log
+configs/paths.local.yaml

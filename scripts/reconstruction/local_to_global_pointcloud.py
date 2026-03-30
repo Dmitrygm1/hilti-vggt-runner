@@ -1,86 +1,45 @@
-import os
-import glob
-import numpy as np
-import open3d as o3d
-from scipy.spatial.transform import Rotation as R
+#!/usr/bin/env python3
+from __future__ import annotations
 
-POSE_FILE = "../office_loop_run1.txt"
+import argparse
+from pathlib import Path
+import sys
 
-def load_poses(path):
-    poses = {}
-    with open(path, "r") as f:
-        for line in f:
-            parts = line.strip().split()
-            if len(parts) != 8:
-                continue
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-            frame = float(parts[0])
-            tx, ty, tz = map(float, parts[1:4])
-            qx, qy, qz, qw = map(float, parts[4:8])
-
-            rot = R.from_quat([qx, qy, qz, qw]).as_matrix()
-            t = np.array([tx, ty, tz])
-
-            T = np.eye(4)
-            T[:3, :3] = rot
-            T[:3, 3] = t
-
-            poses[frame] = T
-
-    return poses
+from hilti_vggt_runner.export import export_framewise_logs_to_ply
 
 
-poses = load_poses(POSE_FILE)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Merge VGGT-SLAM framewise .npz logs into a global .ply. "
+            "The logged pointclouds are already in world coordinates, so no pose file is needed."
+        )
+    )
+    parser.add_argument("--input-dir", required=True, help="Directory containing VGGT framewise .npz logs")
+    parser.add_argument("--output-path", required=True, help="Output .ply path")
+    parser.add_argument("--voxel-size", type=float, default=0.02)
+    parser.add_argument("--nb-neighbors", type=int, default=20)
+    parser.add_argument("--std-ratio", type=float, default=2.0)
+    return parser.parse_args()
 
-files = sorted(glob.glob("*.npz"), key=lambda x: float(os.path.splitext(x)[0]))
 
-all_points = []
+def main() -> None:
+    args = parse_args()
+    summary = export_framewise_logs_to_ply(
+        log_dir=Path(args.input_dir),
+        output_path=Path(args.output_path),
+        voxel_size=args.voxel_size,
+        nb_neighbors=args.nb_neighbors,
+        std_ratio=args.std_ratio,
+    )
+    print(f"Merged {summary.frame_logs} frame logs")
+    print(f"Raw points: {summary.raw_points}")
+    print(f"Output points: {summary.output_points}")
+    print(f"Saved {summary.output_path}")
 
-for f in files:
-    frame_id = float(os.path.splitext(f)[0])
 
-    if frame_id not in poses:
-        continue
-
-    data = np.load(f)
-
-    pc = data["pointcloud"]
-    mask = data["mask"].astype(bool)
-
-    pts = pc[mask]
-    pts = pts[np.isfinite(pts).all(axis=1)]
-
-    if len(pts) == 0:
-        continue
-
-    T = poses[frame_id]
-
-    Rm = T[:3, :3]
-    t = T[:3, 3]
-
-    pts_world = (Rm @ pts.T).T + t
-
-    all_points.append(pts_world)
-
-points = np.vstack(all_points)
-
-print("Merged raw points:", points.shape)
-
-pcd = o3d.geometry.PointCloud()
-pcd.points = o3d.utility.Vector3dVector(points)
-
-pcd = pcd.voxel_down_sample(voxel_size=0.02)
-
-pcd, _ = pcd.remove_statistical_outlier(
-    nb_neighbors=20,
-    std_ratio=2.0
-)
-
-print("After cleanup:", np.asarray(pcd.points).shape)
-
-o3d.io.write_point_cloud(
-    "office_loop_global_reconstruction.ply",
-    pcd
-)
-
-print("Saved office_loop_global_reconstruction.ply")
+if __name__ == "__main__":
+    main()
