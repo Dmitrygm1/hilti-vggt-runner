@@ -1,3 +1,3 @@
 # hilti-vggt-runner
 
-Glue code for running VGGT-SLAM on Hilti challenge data.
+Glue code and experiment scripts for running VGGT-SLAM on Hilti challenge data.
