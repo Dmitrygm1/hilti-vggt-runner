@@ -8,6 +8,7 @@ from typing import Any, Literal
 import yaml
 
 ProfileName = Literal["smoke", "full"]
+InputType = Literal["mp4", "rosbag"]
 
 
 def _expand_envvars(value: Any) -> Any:
@@ -35,6 +36,12 @@ def _as_path(raw_value: str | os.PathLike[str]) -> Path:
     return path.resolve()
 
 
+def _as_optional_path(raw_value: str | os.PathLike[str] | None) -> Path | None:
+    if raw_value in (None, ""):
+        return None
+    return _as_path(raw_value)
+
+
 def _to_serializable(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
@@ -57,10 +64,43 @@ class PathsConfig:
 
 @dataclass(frozen=True)
 class ExtractionConfig:
-    sample_fps: float
     jpeg_quality: int
-    rotate_180: bool
     smoke_frame_count: int
+
+
+@dataclass(frozen=True)
+class Mp4InputConfig:
+    type: Literal["mp4"]
+    source_mp4: Path
+    sample_fps: float
+    rotate_180: bool
+
+    @property
+    def source_path(self) -> Path:
+        return self.source_mp4
+
+
+@dataclass(frozen=True)
+class RosbagInputConfig:
+    type: Literal["rosbag"]
+    rosbag_db3: Path
+    calibration_yaml: Path
+    mask0: Path | None
+    mask1: Path | None
+    sphere_m: float
+    stride: int
+    max_frames: int
+    rotate_180: bool
+    sync_tolerance_ns: int
+    topic0: str
+    topic1: str
+
+    @property
+    def source_path(self) -> Path:
+        return self.rosbag_db3
+
+
+InputConfig = Mp4InputConfig | RosbagInputConfig
 
 
 @dataclass(frozen=True)
@@ -84,7 +124,7 @@ class ExportConfig:
 @dataclass(frozen=True)
 class SequenceConfig:
     run_name: str
-    source_mp4: Path
+    input: InputConfig
     extraction: ExtractionConfig
     vggt: VggtConfig
     export: ExportConfig
@@ -96,7 +136,9 @@ class LayoutConfig:
     frames_dir: Path
     smoke_frames_dir: Path
     frame_manifest_path: Path
-    video_metadata_path: Path
+    source_metadata_path: Path
+    stitch_summary_path: Path
+    preview_path: Path
     profile_root: Path
     image_folder: Path
     vggt_output_dir: Path
@@ -126,6 +168,58 @@ class RunnerContext:
         )
 
 
+def _parse_input_config(seq_cfg: dict[str, Any]) -> InputConfig:
+    extraction_cfg = seq_cfg.get("extraction", {})
+    input_cfg = seq_cfg.get("input")
+
+    if input_cfg is None:
+        return Mp4InputConfig(
+            type="mp4",
+            source_mp4=_as_path(seq_cfg["source_mp4"]),
+            sample_fps=float(extraction_cfg.get("sample_fps", 3.0)),
+            rotate_180=bool(extraction_cfg.get("rotate_180", False)),
+        )
+
+    if not isinstance(input_cfg, dict):
+        raise ValueError("Sequence 'input' must be a mapping")
+
+    input_type = str(input_cfg.get("type", "mp4")).strip().lower()
+    if input_type == "mp4":
+        source_mp4 = input_cfg.get("source_mp4", seq_cfg.get("source_mp4"))
+        if source_mp4 in (None, ""):
+            raise ValueError("MP4 input requires input.source_mp4")
+        return Mp4InputConfig(
+            type="mp4",
+            source_mp4=_as_path(source_mp4),
+            sample_fps=float(input_cfg.get("sample_fps", extraction_cfg.get("sample_fps", 3.0))),
+            rotate_180=bool(input_cfg.get("rotate_180", extraction_cfg.get("rotate_180", False))),
+        )
+
+    if input_type == "rosbag":
+        rosbag_db3 = input_cfg.get("rosbag_db3")
+        calibration_yaml = input_cfg.get("calibration_yaml")
+        if rosbag_db3 in (None, ""):
+            raise ValueError("Rosbag input requires input.rosbag_db3")
+        if calibration_yaml in (None, ""):
+            raise ValueError("Rosbag input requires input.calibration_yaml")
+        return RosbagInputConfig(
+            type="rosbag",
+            rosbag_db3=_as_path(rosbag_db3),
+            calibration_yaml=_as_path(calibration_yaml),
+            mask0=_as_optional_path(input_cfg.get("mask0")),
+            mask1=_as_optional_path(input_cfg.get("mask1")),
+            sphere_m=float(input_cfg.get("sphere_m", 10.0)),
+            stride=int(input_cfg.get("stride", 10)),
+            max_frames=int(input_cfg.get("max_frames", 0)),
+            rotate_180=bool(input_cfg.get("rotate_180", True)),
+            sync_tolerance_ns=int(input_cfg.get("sync_tolerance_ns", 5_000_000)),
+            topic0=str(input_cfg.get("topic0", "/cam0/image_raw/compressed")),
+            topic1=str(input_cfg.get("topic1", "/cam1/image_raw/compressed")),
+        )
+
+    raise ValueError(f"Unsupported input.type: {input_type}")
+
+
 def load_runner_context(
     paths_config_path: str | Path,
     sequence_config_path: str | Path,
@@ -152,11 +246,9 @@ def load_runner_context(
 
     sequence = SequenceConfig(
         run_name=str(seq_cfg["run_name"]),
-        source_mp4=_as_path(seq_cfg["source_mp4"]),
+        input=_parse_input_config(seq_cfg),
         extraction=ExtractionConfig(
-            sample_fps=float(extraction_cfg.get("sample_fps", 3.0)),
             jpeg_quality=int(extraction_cfg.get("jpeg_quality", 95)),
-            rotate_180=bool(extraction_cfg.get("rotate_180", False)),
             smoke_frame_count=int(extraction_cfg.get("smoke_frame_count", 96)),
         ),
         vggt=VggtConfig(
@@ -183,16 +275,16 @@ def load_runner_context(
     frames_dir = run_root / "frames"
     smoke_frames_dir = run_root / "smoke_frames"
     profile_root = run_root / profile
-    export_name = (
-        f"{sequence.run_name}_smoke.ply" if profile == "smoke" else f"{sequence.run_name}.ply"
-    )
+    export_name = f"{sequence.run_name}_smoke.ply" if profile == "smoke" else f"{sequence.run_name}.ply"
 
     layout = LayoutConfig(
         run_root=run_root,
         frames_dir=frames_dir,
         smoke_frames_dir=smoke_frames_dir,
         frame_manifest_path=run_root / "frame_manifest.csv",
-        video_metadata_path=run_root / "video_metadata.yaml",
+        source_metadata_path=run_root / "source_metadata.yaml",
+        stitch_summary_path=run_root / "stitch_summary.yaml",
+        preview_path=run_root / "frame_preview.jpg",
         profile_root=profile_root,
         image_folder=smoke_frames_dir if profile == "smoke" else frames_dir,
         vggt_output_dir=profile_root / "vggt",
@@ -216,16 +308,37 @@ def validate_context(context: RunnerContext) -> None:
         problems.append(f"VGGT main.py not found under: {context.paths.vggt_root}")
     if not context.paths.hilti_repo_root.is_dir():
         problems.append(f"Hilti challenge repo not found: {context.paths.hilti_repo_root}")
-    if not context.sequence.source_mp4.is_file():
-        problems.append(f"Source MP4 not found: {context.sequence.source_mp4}")
     if not context.paths.venv_python.is_file():
         problems.append(f"Runner Python executable not found: {context.paths.venv_python}")
-    if context.sequence.extraction.sample_fps <= 0:
-        problems.append("Extraction sample_fps must be greater than 0")
+
     if context.sequence.extraction.smoke_frame_count <= 0:
         problems.append("Smoke frame count must be greater than 0")
     if context.sequence.extraction.jpeg_quality < 1 or context.sequence.extraction.jpeg_quality > 100:
         problems.append("JPEG quality must be within [1, 100]")
+
+    input_cfg = context.sequence.input
+    if isinstance(input_cfg, Mp4InputConfig):
+        if not input_cfg.source_mp4.is_file():
+            problems.append(f"Source MP4 not found: {input_cfg.source_mp4}")
+        if input_cfg.sample_fps <= 0:
+            problems.append("MP4 input sample_fps must be greater than 0")
+    else:
+        if not input_cfg.rosbag_db3.is_file():
+            problems.append(f"Rosbag DB3 not found: {input_cfg.rosbag_db3}")
+        if not input_cfg.calibration_yaml.is_file():
+            problems.append(f"Calibration YAML not found: {input_cfg.calibration_yaml}")
+        if input_cfg.mask0 is not None and not input_cfg.mask0.is_file():
+            problems.append(f"Mask0 not found: {input_cfg.mask0}")
+        if input_cfg.mask1 is not None and not input_cfg.mask1.is_file():
+            problems.append(f"Mask1 not found: {input_cfg.mask1}")
+        if input_cfg.sphere_m <= 0:
+            problems.append("Rosbag input sphere_m must be greater than 0")
+        if input_cfg.stride <= 0:
+            problems.append("Rosbag input stride must be greater than 0")
+        if input_cfg.max_frames < 0:
+            problems.append("Rosbag input max_frames cannot be negative")
+        if input_cfg.sync_tolerance_ns <= 0:
+            problems.append("Rosbag input sync_tolerance_ns must be greater than 0")
 
     if problems:
         raise ValueError("\n".join(problems))

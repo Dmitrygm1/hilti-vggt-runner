@@ -6,6 +6,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
+
 from .config import RunnerContext, ensure_layout_dirs, write_resolved_config
 from .prepare import create_smoke_subset, list_image_files
 
@@ -69,6 +71,15 @@ def build_vggt_command(context: RunnerContext) -> list[str]:
 def _ensure_image_folder_ready(context: RunnerContext) -> None:
     if context.profile == "smoke" and not context.layout.smoke_frames_dir.exists():
         create_smoke_subset(context)
+
+    if context.profile == "full" and context.layout.source_metadata_path.is_file():
+        with context.layout.source_metadata_path.open("r", encoding="utf-8") as handle:
+            source_metadata = yaml.safe_load(handle) or {}
+        if not bool(source_metadata.get("is_complete", False)):
+            raise RuntimeError(
+                "The current prepared frame set is partial and was likely created for a smoke run.\n"
+                "Run prepare_hilti_data.py again with --profile full before launching the full reconstruction."
+            )
 
     image_files = list_image_files(context.layout.image_folder)
     if not image_files:

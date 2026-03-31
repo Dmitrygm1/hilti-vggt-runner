@@ -1,4 +1,4 @@
-"""Utilities for preparing Hilti video inputs and exporting VGGT-SLAM results."""
+"""Utilities for preparing Hilti MP4 or rosbag inputs and exporting VGGT-SLAM results."""
 
 __all__ = [
     "__version__",

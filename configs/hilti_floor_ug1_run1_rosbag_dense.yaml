@@ -1,0 +1,31 @@
+run_name: floor_UG1_2025-06-18_run_1_rosbag_dense
+
+input:
+  type: rosbag
+  rosbag_db3: /work/scratch/${USER}/hilti-2026/raw/floor_UG1/2025-06-18/run_1/rosbag/rosbag.db3
+  calibration_yaml: ${HOME}/projects/hilti-trimble-slam-challenge-2026/config/hilti_openvins/kalibr_imucam_chain.yaml
+  mask0: ${HOME}/projects/hilti-trimble-slam-challenge-2026/config/hilti_openvins/mask_cam0.png
+  mask1: ${HOME}/projects/hilti-trimble-slam-challenge-2026/config/hilti_openvins/mask_cam1.png
+  sphere_m: 10.0
+  stride: 6
+  max_frames: 0
+  rotate_180: true
+  sync_tolerance_ns: 5000000
+
+extraction:
+  jpeg_quality: 95
+  smoke_frame_count: 96
+
+vggt:
+  submap_size: 16
+  overlapping_window_size: 1
+  max_loops: 1
+  min_disparity: 50.0
+  conf_threshold: 25.0
+  lc_thres: 0.95
+  vis_voxel_size:
+
+export:
+  voxel_size: 0.02
+  nb_neighbors: 20
+  std_ratio: 2.0

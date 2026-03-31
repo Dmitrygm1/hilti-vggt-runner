@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hilti-vggt-runner"
 version = "0.1.0"
-description = "Runner utilities for Hilti equirectangular video reconstruction with VGGT-SLAM."
+description = "Runner utilities for Hilti MP4 and rosbag reconstruction with VGGT-SLAM."
 requires-python = ">=3.11"
 dependencies = [
   "numpy",

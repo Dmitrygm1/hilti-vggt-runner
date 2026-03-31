@@ -1,26 +1,27 @@
 # hilti-vggt-runner
 
-Reproducible runner and glue code for taking a Hilti equirectangular walkthrough video, preparing it for `VGGT-SLAM`, and exporting a viewable point cloud reconstruction.
+Reproducible runner and glue code for preparing Hilti inputs, running `VGGT-SLAM`, and exporting a viewable `.ply` reconstruction.
 
 ## What This Repo Owns
 
 - Path and sequence configuration.
-- MP4 frame extraction for the upside-down Hilti equirectangular video.
+- Source preparation for either:
+  - stitched equirectangular MP4 input
+  - raw Hilti ROS2 bag input stitched into equirectangular frames
 - `VGGT-SLAM` command orchestration.
-- Export of logged framewise point clouds to a standard `.ply`.
+- Export of logged framewise point clouds to a global `.ply`.
 - Lightweight tests for config, extraction, and export logic.
 
-Method-specific code stays in `/home/drudshin/projects/VGGT-SLAM`. The Hilti challenge reference repo stays untouched in `/home/drudshin/projects/hilti-trimble-slam-challenge-2026`.
+Method-specific code stays in `/home/drudshin/projects/VGGT-SLAM`. The Hilti challenge reference repo stays in `/home/drudshin/projects/hilti-trimble-slam-challenge-2026`.
 
 ## Prerequisites
 
-- Existing Python environment: `/home/drudshin/jupyter-vggt`
-- Existing `VGGT-SLAM` checkout: `/home/drudshin/projects/VGGT-SLAM`
-- Existing Hilti challenge repo: `/home/drudshin/projects/hilti-trimble-slam-challenge-2026`
-- Source MP4:
-  `/home/drudshin/data/hilti-2026/raw/floor_UG1/2025-06-18/run_1/floor_UG1_2025-06-18_run_1.mp4`
+- Python environment: `/home/drudshin/jupyter-vggt`
+- `VGGT-SLAM`: `/home/drudshin/projects/VGGT-SLAM`
+- Hilti challenge repo: `/home/drudshin/projects/hilti-trimble-slam-challenge-2026`
+- Local path config: [`configs/local_paths.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/local_paths.yaml)
 
-Activate the environment before running any script:
+Activate the environment before running scripts:
 
 ```bash
 source ~/jupyter-vggt/bin/activate
@@ -29,9 +30,7 @@ cd ~/projects/hilti-vggt-runner
 
 ## GPU Shell
 
-Preparation and export can run without a GPU. `VGGT-SLAM` itself should be run from a GPU shell.
-
-Example:
+Preparation and export can run on a login node. `VGGT-SLAM` itself should be launched from a GPU shell.
 
 ```bash
 srun --pty -A 3dv --gpus=5060ti:1 -t 120 bash --login
@@ -40,9 +39,8 @@ srun --pty -A 3dv --gpus=5060ti:1 -t 120 bash --login
 Important:
 
 - `srun --pty ... bash --login` starts a new shell on the GPU node.
-- Wait until the prompt changes to something like `drudshin@studgpu-node01:...$`.
-- Only then run the rest of the commands.
-- If you paste the whole block at once, the lines after `srun` may not execute in the new shell.
+- Wait for the prompt to change before running the rest of your commands.
+- If you paste a whole block before the GPU prompt appears, the later commands may never run in the new shell.
 
 After the GPU prompt appears:
 
@@ -52,28 +50,22 @@ export TORCH_HOME=/work/scratch/$USER/torch-cache
 cd ~/projects/hilti-vggt-runner
 ```
 
-If you prefer a single command, this form is more reliable than pasting a full block before the GPU prompt:
-
-```bash
-srun --pty -A 3dv --gpus=5060ti:1 -t 120 bash --login -lc '
-source ~/jupyter-vggt/bin/activate
-export TORCH_HOME=/work/scratch/$USER/torch-cache
-cd ~/projects/hilti-vggt-runner
-python scripts/prepare_hilti_data.py --paths configs/local_paths.yaml --sequence configs/hilti_floor_ug1_run1.yaml --profile full
-python scripts/run_vggt_on_sequence.py --paths configs/local_paths.yaml --sequence configs/hilti_floor_ug1_run1.yaml --profile full
-python scripts/export_results.py --paths configs/local_paths.yaml --sequence configs/hilti_floor_ug1_run1.yaml --profile full
-'
-```
-
 ## Configs
 
-- Copy or adapt [`configs/paths.example.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/paths.example.yaml) for your machine.
-- A repo-local default [`configs/local_paths.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/local_paths.yaml) is included and uses environment-variable expansion instead of a hardcoded username.
-- The single-floor experiment config is [`configs/hilti_floor_ug1_run1.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1.yaml).
+- [`configs/paths.example.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/paths.example.yaml): template for path setup
+- [`configs/local_paths.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/local_paths.yaml): repo-local default using `${USER}`
+- [`configs/hilti_floor_ug1_run1.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1.yaml): MP4 baseline path
+- [`configs/hilti_floor_ug1_run1_rosbag.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_rosbag.yaml): rosbag parity run at `stride=10`
+- [`configs/hilti_floor_ug1_run1_rosbag_dense.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_rosbag_dense.yaml): denser rosbag run at `stride=6`
 
-## Single-Floor Workflow
+Sequence configs now use an `input.type` discriminator:
 
-1. Prepare the upside-down equirectangular MP4 into a canonical frame directory in scratch.
+- `mp4`: `source_mp4`, `sample_fps`, `rotate_180`
+- `rosbag`: `rosbag_db3`, `calibration_yaml`, `mask0`, `mask1`, `sphere_m`, `stride`, `max_frames`, `rotate_180`, `sync_tolerance_ns`
+
+## MP4 Workflow
+
+Prepare:
 
 ```bash
 python scripts/prepare_hilti_data.py \
@@ -82,7 +74,7 @@ python scripts/prepare_hilti_data.py \
   --profile smoke
 ```
 
-2. Run `VGGT-SLAM` headlessly on the chosen profile.
+Run VGGT:
 
 ```bash
 python scripts/run_vggt_on_sequence.py \
@@ -91,7 +83,7 @@ python scripts/run_vggt_on_sequence.py \
   --profile smoke
 ```
 
-3. Export the logged framewise point clouds to `.ply`.
+Export:
 
 ```bash
 python scripts/export_results.py \
@@ -100,14 +92,111 @@ python scripts/export_results.py \
   --profile smoke
 ```
 
-For the full reconstruction, rerun the same commands with `--profile full`.
+Use `--profile full` for the full MP4 run.
+
+## Rosbag Workflow
+
+The rosbag path is meant to test whether calibrated dual-fisheye stitching works better than the vendor MP4 for Hilti UG1.
+
+### Rosbag Prerequisite
+
+Stage the exact bag for the run at:
+
+```text
+${HOME}/data/hilti-2026/floor_UG1/2025-06-18/run_1/rosbag/rosbag.db3
+```
+
+That matches the default config in [`configs/hilti_floor_ug1_run1_rosbag.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_rosbag.yaml). If the bag is somewhere else, update that config.
+
+The runner uses the challenge repo’s calibration and masks:
+
+- `config/hilti_openvins/kalibr_imucam_chain.yaml`
+- `config/hilti_openvins/mask_cam0.png`
+- `config/hilti_openvins/mask_cam1.png`
+
+### Smoke
+
+```bash
+python scripts/prepare_hilti_data.py \
+  --paths configs/local_paths.yaml \
+  --sequence configs/hilti_floor_ug1_run1_rosbag.yaml \
+  --profile smoke
+
+python scripts/run_vggt_on_sequence.py \
+  --paths configs/local_paths.yaml \
+  --sequence configs/hilti_floor_ug1_run1_rosbag.yaml \
+  --profile smoke
+
+python scripts/export_results.py \
+  --paths configs/local_paths.yaml \
+  --sequence configs/hilti_floor_ug1_run1_rosbag.yaml \
+  --profile smoke
+```
+
+### Full Parity Run
+
+```bash
+python scripts/prepare_hilti_data.py \
+  --paths configs/local_paths.yaml \
+  --sequence configs/hilti_floor_ug1_run1_rosbag.yaml \
+  --profile full
+
+python scripts/run_vggt_on_sequence.py \
+  --paths configs/local_paths.yaml \
+  --sequence configs/hilti_floor_ug1_run1_rosbag.yaml \
+  --profile full
+
+python scripts/export_results.py \
+  --paths configs/local_paths.yaml \
+  --sequence configs/hilti_floor_ug1_run1_rosbag.yaml \
+  --profile full
+```
+
+### Denser Follow-Up
+
+If the parity run stitches cleanly but still underuses the scene, rerun with the dense config:
+
+```bash
+python scripts/prepare_hilti_data.py \
+  --paths configs/local_paths.yaml \
+  --sequence configs/hilti_floor_ug1_run1_rosbag_dense.yaml \
+  --profile full
+```
+
+Important:
+
+- Rosbag stitching applies a 180° rotation by default because the Hilti raw camera images are inverted.
+- Smoke preparation creates a partial frame cache. Run `prepare_hilti_data.py --profile full` before a full reconstruction or the launcher will stop with a clear error.
+- Bag timestamps are written to `frame_manifest.csv`, not encoded into filenames. This avoids the `VGGT-SLAM` filename parsing trap where only the first numeric token is used as the frame id.
+
+## Standalone Rosbag Stitcher
+
+If you want to stitch frames without using the full runner:
+
+```bash
+python scripts/preprocessing/extract_hilti_frames.py \
+  --bag ~/data/hilti-2026/floor_UG1/2025-06-18/run_1/rosbag/rosbag.db3 \
+  --yaml ~/projects/hilti-trimble-slam-challenge-2026/config/hilti_openvins/kalibr_imucam_chain.yaml \
+  --mask0 ~/projects/hilti-trimble-slam-challenge-2026/config/hilti_openvins/mask_cam0.png \
+  --mask1 ~/projects/hilti-trimble-slam-challenge-2026/config/hilti_openvins/mask_cam1.png \
+  --out_dir /work/scratch/$USER/hilti-vggt/manual_stitch/floor_UG1_run_1/frames \
+  --stride 10 \
+  --rotate_180
+```
+
+This wrapper writes:
+
+- stitched frames under the requested `--out_dir`
+- `frame_manifest.csv` next to the frame folder
+- `stitch_summary.yaml` next to the frame folder
+- `frame_preview.jpg` next to the frame folder
 
 ## Outputs
 
 Outputs live under:
 
 ```text
-/work/scratch/$USER/hilti-vggt/runs/floor_UG1_2025-06-18_run_1/
+/work/scratch/$USER/hilti-vggt/runs/
 ```
 
 `/work/scratch` is the ETH cluster scratch filesystem, not your home directory. The actual path is still user-specific, for example:
@@ -116,45 +205,38 @@ Outputs live under:
 /work/scratch/drudshin/hilti-vggt/...
 ```
 
-This is intentional because the extracted frames, dense logs, and reconstruction artifacts are too large for a 20 GB home quota.
+This is intentional because extracted frames, dense logs, and reconstructions are too large for the home quota.
 
-Important paths:
+Typical run layout:
 
-- `frames/`: canonical extracted frames from the source MP4
-- `smoke_frames/`: symlinked subset for quick validation
+- `frames/`: canonical prepared frames
+- `smoke_frames/`: symlinked smoke subset
+- `frame_manifest.csv`: per-frame source metadata
+- `source_metadata.yaml`: generic source prep summary
+- `stitch_summary.yaml`: rosbag-specific stitch summary
+- `frame_preview.jpg`: contact sheet from extracted frames
 - `smoke/vggt/poses.txt`: VGGT pose log
-- `smoke/vggt/poses_logs/*.npz`: framewise world-frame point clouds logged by VGGT
-- `smoke/exports/floor_UG1_2025-06-18_run_1_smoke.ply`: exported smoke point cloud
-- `full/exports/floor_UG1_2025-06-18_run_1.ply`: exported full point cloud
+- `smoke/vggt/poses_logs/*.npz`: framewise world-frame point clouds from VGGT
+- `smoke/exports/*.ply`: smoke export
+- `full/exports/*.ply`: full export
 
 ## Viewing The Point Cloud
 
-Do not expect `open3d.visualization.draw_geometries(...)` to work on the cluster compute node. Those nodes are headless and usually do not have an interactive OpenGL display.
+Do not expect `open3d.visualization.draw_geometries(...)` to work on the compute node. The GPU nodes are headless and usually do not have an interactive OpenGL display.
 
 For a headless cluster-side sanity check:
 
 ```bash
 python scripts/inspect_pointcloud.py \
-  /work/scratch/$USER/hilti-vggt/runs/floor_UG1_2025-06-18_run_1/full/exports/floor_UG1_2025-06-18_run_1.ply \
-  --preview-path /work/scratch/$USER/hilti-vggt/runs/floor_UG1_2025-06-18_run_1/full/exports/floor_UG1_2025-06-18_run_1_preview.png
+  /work/scratch/$USER/hilti-vggt/runs/floor_UG1_2025-06-18_run_1_rosbag/full/exports/floor_UG1_2025-06-18_run_1_rosbag.ply \
+  --preview-path /work/scratch/$USER/hilti-vggt/runs/floor_UG1_2025-06-18_run_1_rosbag/full/exports/floor_UG1_2025-06-18_run_1_rosbag_preview.png
 ```
 
-That prints point-count and bounds, and writes a static preview image.
-
-If you are on a machine with a real display and OpenGL, Open3D works:
-
-```bash
-python - <<'PY'
-import open3d as o3d
-pcd = o3d.io.read_point_cloud("/work/scratch/$USER/hilti-vggt/runs/floor_UG1_2025-06-18_run_1/full/exports/floor_UG1_2025-06-18_run_1.ply")
-o3d.visualization.draw_geometries([pcd])
-PY
-```
-
-You can also copy the `.ply` locally and open it in CloudCompare or MeshLab.
+That prints point count and bounds, and writes a static preview image. For interactive viewing, copy the `.ply` locally and open it in CloudCompare or MeshLab.
 
 ## Notes
 
-- The input MP4 is already equirectangular, so the bag-based stitching helper in `scripts/preprocessing/extract_hilti_frames.py` is not used in the primary path.
-- The video is upside down, so frame extraction applies a 180° rotation by default for this sequence.
+- The office-loop baseline worked end to end, so VGGT itself and the `.npz` to `.ply` path are known-good.
+- The Hilti MP4 run was technically successful but visually poor, which is why the rosbag path exists.
+- The challenge README warns that any dual-fisheye to single equirect panorama is only approximate because the two cameras do not share one optical center.
 - The exporter uses the logged `.npz` files directly and does not reapply poses, because `VGGT-SLAM` already writes those point clouds in world coordinates.
