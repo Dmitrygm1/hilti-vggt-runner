@@ -8,10 +8,12 @@ version = "0.1.0"
 description = "Runner utilities for Hilti MP4 and rosbag reconstruction with VGGT-SLAM."
 requires-python = ">=3.11"
 dependencies = [
+  "matplotlib",
   "numpy",
   "open3d",
   "opencv-python",
   "PyYAML>=6.0",
+  "scipy",
 ]
 
 [project.optional-dependencies]

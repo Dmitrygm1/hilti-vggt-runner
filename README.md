@@ -1,6 +1,6 @@
 # hilti-vggt-runner
 
-Reproducible runner and glue code for preparing Hilti inputs, running `VGGT-SLAM`, and exporting a viewable `.ply` reconstruction.
+Reproducible runner and glue code for preparing Hilti inputs, running `VGGT-SLAM`, exporting a viewable `.ply` reconstruction, and evaluating trajectories and floor-plan consistency.
 
 ## What This Repo Owns
 
@@ -10,6 +10,7 @@ Reproducible runner and glue code for preparing Hilti inputs, running `VGGT-SLAM
   - raw Hilti ROS2 bag input stitched into equirectangular frames
 - `VGGT-SLAM` command orchestration.
 - Export of logged framewise point clouds to a global `.ply`.
+- Evaluation of estimated trajectories against GT and floor-plan consistency checks.
 - Lightweight tests for config, extraction, and export logic.
 
 Method-specific code stays in `/home/drudshin/projects/VGGT-SLAM`. The Hilti challenge reference repo stays in `/home/drudshin/projects/hilti-trimble-slam-challenge-2026`.
@@ -55,8 +56,11 @@ cd ~/projects/hilti-vggt-runner
 - [`configs/paths.example.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/paths.example.yaml): template for path setup
 - [`configs/local_paths.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/local_paths.yaml): repo-local default using `${USER}`
 - [`configs/hilti_floor_ug1_run1.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1.yaml): MP4 baseline path
+- [`configs/hilti_floor1_2025-05-05_run1.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor1_2025-05-05_run1.yaml): GT-backed MP4 reference run
 - [`configs/hilti_floor_ug1_run1_rosbag.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_rosbag.yaml): rosbag parity run at `stride=10`
 - [`configs/hilti_floor_ug1_run1_rosbag_dense.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_rosbag_dense.yaml): denser rosbag run at `stride=6`
+- [`configs/eval_floor1_2025-05-05_run1.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/eval_floor1_2025-05-05_run1.yaml): supervisor-facing GT evaluation for floor 1
+- [`configs/eval_floor_ug1_2025-06-18_run1_rosbag_dense.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/eval_floor_ug1_2025-06-18_run1_rosbag_dense.yaml): supervisor-facing floor-plan evaluation for June 18 dense rosbag
 
 Sequence configs now use an `input.type` discriminator:
 
@@ -93,6 +97,37 @@ python scripts/export_results.py \
 ```
 
 Use `--profile full` for the full MP4 run.
+
+## GT-Backed Reference Run
+
+Use the floor 1 MP4 when you need a reconstruction that can be compared against a released full GT trajectory.
+
+Prepare:
+
+```bash
+python scripts/prepare_hilti_data.py \
+  --paths configs/local_paths.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1.yaml \
+  --profile full
+```
+
+Run VGGT:
+
+```bash
+python scripts/run_vggt_on_sequence.py \
+  --paths configs/local_paths.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1.yaml \
+  --profile full
+```
+
+Export:
+
+```bash
+python scripts/export_results.py \
+  --paths configs/local_paths.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1.yaml \
+  --profile full
+```
 
 ## Rosbag Workflow
 
@@ -219,6 +254,76 @@ Typical run layout:
 - `smoke/vggt/poses_logs/*.npz`: framewise world-frame point clouds from VGGT
 - `smoke/exports/*.ply`: smoke export
 - `full/exports/*.ply`: full export
+
+## Evaluation
+
+The evaluator reads the actual reconstruction artifacts from a run’s `resolved_config.yaml`. It does not guess where `poses.txt`, `frame_manifest.csv`, or the dense logs live.
+
+Important artifact semantics:
+
+- `VGGT-SLAM` writes `poses.txt` as `frame_id tx ty tz qx qy qz qw`
+- `frame_id` is not a timestamp
+- `frame_manifest.csv` is the bridge from `frame_id` to time
+- rosbag manifests are already absolute timestamps
+- MP4 manifests are video-relative timestamps, so GT evaluation needs a configured absolute start time
+
+### Full Evaluation
+
+```bash
+python scripts/evaluation/run_full_evaluation.py \
+  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1/full/resolved_config.yaml \
+  --eval-config configs/eval_floor1_2025-05-05_run1.yaml
+```
+
+### Trajectory Only
+
+```bash
+python scripts/evaluation/evaluate_trajectory.py \
+  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1/full/resolved_config.yaml \
+  --eval-config configs/eval_floor1_2025-05-05_run1.yaml
+```
+
+### Floorplan Only
+
+```bash
+python scripts/evaluation/evaluate_floorplan.py \
+  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_UG1_2025-06-18_run_1_rosbag_dense/full/resolved_config.yaml \
+  --eval-config configs/eval_floor_ug1_2025-06-18_run1_rosbag_dense.yaml
+```
+
+### Evaluation Outputs
+
+Evaluation outputs live next to the run under:
+
+```text
+<profile_root>/evaluation/<eval_name>/
+```
+
+Typical files:
+
+- `metrics.json`: machine-readable nested metrics
+- `metrics.csv`: flattened one-row summary
+- `matched_poses.csv`: aligned estimate vs GT samples for trajectory runs
+- `report.md`: supervisor-facing summary with linked plots
+- `plots/trajectory_xy_best_fit.png`
+- `plots/translation_error_vs_time.png`
+- `plots/translation_error_histogram.png`
+- `plots/rpe_vs_time.png`
+- `plots/floorplan_overlay.png`
+- `plots/wall_consistency_overlay.png`
+
+### Current Evaluation Scope
+
+- `floor_1_2025-05-05_run_1`: full GT trajectory evaluation plus floor-plan consistency
+- `floor_UG1_2025-06-18_run_1_rosbag_dense`: init-pose anchor plus floor-plan consistency only
+
+The June 18 run has an init pose in `init_gt_poses.csv`, but there is no released full GT trajectory txt for it in the checked-out challenge repo.
+
+### Evaluation Caveats
+
+- The evaluator does not use the official challenge coverage score as a headline metric because VGGT outputs are sparse by design after frame sampling.
+- MP4 GT evaluation assumes `absolute_start_time_seconds + frame_manifest timestamp_seconds`; for the Hilti reference videos this is configured as `10000.0` seconds based on the challenge README.
+- Floor-plan consistency is an as-planned consistency check, not authoritative as-built truth.
 
 ## Viewing The Point Cloud
 

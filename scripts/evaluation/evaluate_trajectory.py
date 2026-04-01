@@ -5,11 +5,11 @@ from pathlib import Path
 import runpy
 import sys
 
-SCRIPT = Path(__file__).resolve().parent / "evaluation" / "run_full_evaluation.py"
+SCRIPT = Path(__file__).resolve().with_name("run_full_evaluation.py")
 
 
 def main() -> None:
-    sys.argv = [str(SCRIPT), *sys.argv[1:]]
+    sys.argv = [str(SCRIPT), *sys.argv[1:], "--trajectory-only"]
     runpy.run_path(str(SCRIPT), run_name="__main__")
 
 

@@ -1,0 +1,25 @@
+run_name: floor_1_2025-05-05_run_1
+
+input:
+  type: mp4
+  source_mp4: /work/scratch/${USER}/hilti-2026/raw/floor_1/2025-05-05/run_1/equirect_video/floor_1_2025-05-05_run_1.mp4
+  sample_fps: 5.0
+  rotate_180: true
+
+extraction:
+  jpeg_quality: 95
+  smoke_frame_count: 96
+
+vggt:
+  submap_size: 16
+  overlapping_window_size: 1
+  max_loops: 1
+  min_disparity: 50.0
+  conf_threshold: 25.0
+  lc_thres: 0.95
+  vis_voxel_size:
+
+export:
+  voxel_size: 0.02
+  nb_neighbors: 20
+  std_ratio: 2.0
