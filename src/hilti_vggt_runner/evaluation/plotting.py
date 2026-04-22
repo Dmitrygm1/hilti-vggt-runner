@@ -34,39 +34,64 @@ def plot_best_fit_trajectory(evaluation: TrajectoryEvaluation, output_path: Path
     _save_figure(output_path)
 
 
-def plot_error_timeseries(evaluation: TrajectoryEvaluation, output_path: Path) -> None:
+def plot_translation_error_timeseries(evaluation: TrajectoryEvaluation, output_path: Path, *, component: str) -> None:
     relative_time = evaluation.aligned_estimated.timestamps - evaluation.aligned_estimated.timestamps[0]
+    if component == "3d":
+        values = evaluation.translation_error_m
+        title_component = "3D"
+    elif component == "xy":
+        values = evaluation.translation_error_xy_m
+        title_component = "XY"
+    else:
+        raise ValueError(f"Unsupported translation error component: {component}")
+
     plt.figure(figsize=(8, 5))
-    plt.plot(relative_time, evaluation.translation_error_xy_m, label="XY error [m]", color="tab:orange")
-    plt.plot(relative_time, evaluation.translation_error_m, label="3D error [m]", color="tab:blue", alpha=0.8)
+    plt.plot(relative_time, values, color="tab:blue")
     plt.xlabel("Time since evaluation start [s]")
     plt.ylabel("Translation error [m]")
-    plt.title(f"Translation Error vs Time ({evaluation.mode})")
-    plt.legend()
+    plt.title(f"Translation Error vs Time ({title_component}, {evaluation.mode})")
     _save_figure(output_path)
 
 
-def plot_error_histogram(evaluation: TrajectoryEvaluation, output_path: Path) -> None:
+def plot_translation_error_histogram(evaluation: TrajectoryEvaluation, output_path: Path, *, component: str) -> None:
+    if component == "3d":
+        values = evaluation.translation_error_m
+        title_component = "3D"
+        color = "tab:blue"
+    elif component == "xy":
+        values = evaluation.translation_error_xy_m
+        title_component = "XY"
+        color = "tab:orange"
+    else:
+        raise ValueError(f"Unsupported translation error component: {component}")
+
     plt.figure(figsize=(7, 5))
-    plt.hist(evaluation.translation_error_xy_m, bins=30, alpha=0.8, color="tab:orange", label="XY")
-    plt.hist(evaluation.translation_error_m, bins=30, alpha=0.5, color="tab:blue", label="3D")
+    plt.hist(values, bins=30, alpha=0.85, color=color)
     plt.xlabel("Translation error [m]")
     plt.ylabel("Count")
-    plt.title(f"Translation Error Histogram ({evaluation.mode})")
-    plt.legend()
+    plt.title(f"Translation Error Histogram ({title_component}, {evaluation.mode})")
     _save_figure(output_path)
 
 
-def plot_rpe_timeseries(evaluation: TrajectoryEvaluation, output_path: Path) -> None:
+def plot_rpe_translation_timeseries(evaluation: TrajectoryEvaluation, output_path: Path) -> None:
     if evaluation.rpe_translation_m.size == 0:
         return
     plt.figure(figsize=(8, 5))
-    plt.plot(evaluation.rpe_translation_m, label="RPE translation [m]", color="tab:red")
-    plt.plot(evaluation.rpe_rotation_deg, label="RPE rotation [deg]", color="tab:green")
+    plt.plot(evaluation.rpe_translation_m, color="tab:red")
     plt.xlabel("RPE pair index")
-    plt.ylabel("Error")
-    plt.title(f"Relative Pose Error ({evaluation.mode})")
-    plt.legend()
+    plt.ylabel("RPE translation [m]")
+    plt.title(f"Relative Pose Error Translation ({evaluation.mode})")
+    _save_figure(output_path)
+
+
+def plot_rpe_rotation_timeseries(evaluation: TrajectoryEvaluation, output_path: Path) -> None:
+    if evaluation.rpe_rotation_deg.size == 0:
+        return
+    plt.figure(figsize=(8, 5))
+    plt.plot(evaluation.rpe_rotation_deg, color="tab:green")
+    plt.xlabel("RPE pair index")
+    plt.ylabel("RPE rotation [deg]")
+    plt.title(f"Relative Pose Error Rotation ({evaluation.mode})")
     _save_figure(output_path)
 
 

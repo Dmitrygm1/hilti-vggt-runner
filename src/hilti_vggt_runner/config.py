@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
-from dataclasses import asdict, dataclass
+import re
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -9,6 +12,8 @@ import yaml
 
 ProfileName = Literal["smoke", "full"]
 InputType = Literal["mp4", "rosbag"]
+ViewMode = Literal["equirect", "pinhole_fixed", "pinhole_level_imu", "pinhole_level_yaw_imu"]
+ViewOrdering = Literal["frame_major", "view_major"]
 
 
 def _expand_envvars(value: Any) -> Any:
@@ -49,7 +54,26 @@ def _to_serializable(value: Any) -> Any:
         return {key: _to_serializable(item) for key, item in value.items()}
     if isinstance(value, list):
         return [_to_serializable(item) for item in value]
+    if isinstance(value, tuple):
+        return [_to_serializable(item) for item in value]
     return value
+
+
+def _slugify(text: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9]+", "_", text).strip("_").lower() or "item"
+
+
+def _short_hash(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(_to_serializable(payload), sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha1(encoded).hexdigest()[:12]
+
+
+def _infer_source_label(path: Path) -> str:
+    if path.name == "rosbag.db3" and len(path.parts) >= 5:
+        label = "_".join(path.parts[-5:-1])
+    else:
+        label = path.stem or path.name
+    return _slugify(label)
 
 
 @dataclass(frozen=True)
@@ -104,6 +128,41 @@ InputConfig = Mp4InputConfig | RosbagInputConfig
 
 
 @dataclass(frozen=True)
+class ViewsConfig:
+    mode: ViewMode
+    width: int | None
+    height: int | None
+    fov_deg: float | None
+    yaw_deg: float
+    pitch_deg: float
+    roll_deg: float
+    yaws_deg: tuple[float, ...]
+    ordering: ViewOrdering
+    rotate_180: bool
+    imu_tau: float
+    time_offset_ns: int
+    use_yaml_timeshift: bool
+    max_physical_frames: int
+    evaluation_view_index: int
+
+    @property
+    def is_multiview(self) -> bool:
+        return self.mode == "pinhole_level_yaw_imu"
+
+    @property
+    def requires_imu(self) -> bool:
+        return self.mode in {"pinhole_level_imu", "pinhole_level_yaw_imu"}
+
+    @property
+    def view_count(self) -> int:
+        if self.mode == "pinhole_level_yaw_imu":
+            return len(self.yaws_deg)
+        if self.mode in {"equirect", "pinhole_fixed", "pinhole_level_imu"}:
+            return 1
+        raise ValueError(f"Unsupported view mode: {self.mode}")
+
+
+@dataclass(frozen=True)
 class VggtConfig:
     submap_size: int
     overlapping_window_size: int
@@ -111,6 +170,7 @@ class VggtConfig:
     min_disparity: float
     conf_threshold: float
     lc_thres: float
+    disable_flow_keyframes: bool
     vis_voxel_size: float | None = None
 
 
@@ -125,6 +185,7 @@ class ExportConfig:
 class SequenceConfig:
     run_name: str
     input: InputConfig
+    views: ViewsConfig
     extraction: ExtractionConfig
     vggt: VggtConfig
     export: ExportConfig
@@ -133,11 +194,18 @@ class SequenceConfig:
 @dataclass(frozen=True)
 class LayoutConfig:
     run_root: Path
+    prepared_root: Path
+    source_cache_root: Path
+    source_frames_dir: Path
+    source_frame_manifest_path: Path
+    source_metadata_path: Path
+    source_preview_path: Path
+    stitch_summary_path: Path
+    view_cache_root: Path
     frames_dir: Path
     smoke_frames_dir: Path
     frame_manifest_path: Path
-    source_metadata_path: Path
-    stitch_summary_path: Path
+    view_metadata_path: Path
     preview_path: Path
     profile_root: Path
     image_folder: Path
@@ -148,6 +216,7 @@ class LayoutConfig:
     export_path: Path
     command_log_path: Path
     resolved_config_path: Path
+    evaluation_inputs_root: Path
 
 
 @dataclass(frozen=True)
@@ -166,6 +235,16 @@ class RunnerContext:
                 "layout": asdict(self.layout),
             }
         )
+
+
+def requested_physical_frame_limit(sequence: SequenceConfig, profile: ProfileName) -> int:
+    if profile == "smoke":
+        return sequence.extraction.smoke_frame_count
+    if sequence.views.max_physical_frames > 0:
+        return sequence.views.max_physical_frames
+    if isinstance(sequence.input, RosbagInputConfig) and sequence.input.max_frames > 0:
+        return sequence.input.max_frames
+    return 0
 
 
 def _parse_input_config(seq_cfg: dict[str, Any]) -> InputConfig:
@@ -220,6 +299,114 @@ def _parse_input_config(seq_cfg: dict[str, Any]) -> InputConfig:
     raise ValueError(f"Unsupported input.type: {input_type}")
 
 
+def _parse_views_config(seq_cfg: dict[str, Any], input_cfg: InputConfig) -> ViewsConfig:
+    views_cfg = seq_cfg.get("views") or {}
+    if not isinstance(views_cfg, dict):
+        raise ValueError("Sequence 'views' must be a mapping when provided")
+
+    mode = str(views_cfg.get("mode", "equirect")).strip().lower()
+    if mode not in {"equirect", "pinhole_fixed", "pinhole_level_imu", "pinhole_level_yaw_imu"}:
+        raise ValueError(f"Unsupported views.mode: {mode}")
+
+    raw_yaws = views_cfg.get("yaws_deg", (0.0, 90.0, 180.0, 270.0))
+    if isinstance(raw_yaws, str):
+        yaws_deg = tuple(float(chunk.strip()) for chunk in raw_yaws.split(",") if chunk.strip())
+    else:
+        yaws_deg = tuple(float(item) for item in raw_yaws)
+
+    return ViewsConfig(
+        mode=mode,  # type: ignore[arg-type]
+        width=(
+            None if views_cfg.get("width") in (None, "") else int(views_cfg["width"])
+        ),
+        height=(
+            None if views_cfg.get("height") in (None, "") else int(views_cfg["height"])
+        ),
+        fov_deg=(
+            None if views_cfg.get("fov_deg") in (None, "") else float(views_cfg["fov_deg"])
+        ),
+        yaw_deg=float(views_cfg.get("yaw_deg", 0.0)),
+        pitch_deg=float(views_cfg.get("pitch_deg", 0.0)),
+        roll_deg=float(views_cfg.get("roll_deg", 0.0)),
+        yaws_deg=yaws_deg,
+        ordering=str(views_cfg.get("ordering", "frame_major")).strip().lower(),  # type: ignore[arg-type]
+        rotate_180=bool(views_cfg.get("rotate_180", False)),
+        imu_tau=float(views_cfg.get("imu_tau", 0.25)),
+        time_offset_ns=int(views_cfg.get("time_offset_ns", 0)),
+        use_yaml_timeshift=bool(views_cfg.get("use_yaml_timeshift", False)),
+        max_physical_frames=int(views_cfg.get("max_physical_frames", getattr(input_cfg, "max_frames", 0))),
+        evaluation_view_index=int(views_cfg.get("evaluation_view_index", 0)),
+    )
+
+
+def _source_cache_payload(sequence: SequenceConfig, profile: ProfileName) -> dict[str, Any]:
+    return {
+        "profile_limit_physical_frames": requested_physical_frame_limit(sequence, profile),
+        "input": asdict(sequence.input),
+        "jpeg_quality": sequence.extraction.jpeg_quality,
+    }
+
+
+def _view_cache_payload(sequence: SequenceConfig, profile: ProfileName) -> dict[str, Any]:
+    return {
+        "profile_limit_physical_frames": requested_physical_frame_limit(sequence, profile),
+        "views": asdict(sequence.views),
+        "jpeg_quality": sequence.extraction.jpeg_quality,
+    }
+
+
+def _build_view_label(views: ViewsConfig) -> str:
+    if views.mode == "equirect":
+        return "equirect"
+    parts = [views.mode]
+    if views.width is not None and views.height is not None:
+        parts.append(f"{views.width}x{views.height}")
+    if views.fov_deg is not None:
+        parts.append(f"fov{int(round(views.fov_deg))}")
+    if views.mode == "pinhole_fixed":
+        parts.append(f"yaw{int(round(views.yaw_deg))}")
+        parts.append(f"pitch{int(round(views.pitch_deg))}")
+        parts.append(f"roll{int(round(views.roll_deg))}")
+    elif views.mode == "pinhole_level_yaw_imu":
+        yaw_label = "-".join(str(int(round(yaw))) for yaw in views.yaws_deg)
+        parts.append(f"yaws{yaw_label}")
+        parts.append(views.ordering)
+    return _slugify("_".join(parts))
+
+
+def derive_source_cache_root(
+    paths: PathsConfig,
+    sequence: SequenceConfig,
+    profile: ProfileName,
+) -> Path:
+    source_label = _infer_source_label(sequence.input.source_path)
+    prepared_root = paths.outputs_root / "prepared" / source_label
+    source_hash = _short_hash(_source_cache_payload(sequence, profile))
+    return prepared_root / f"source_{source_hash}"
+
+
+def derive_view_cache_root(
+    paths: PathsConfig,
+    sequence: SequenceConfig,
+    profile: ProfileName,
+    *,
+    ordering: ViewOrdering | None = None,
+) -> Path:
+    source_cache_root = derive_source_cache_root(paths, sequence, profile)
+    views = sequence.views if ordering is None else replace(sequence.views, ordering=ordering)
+    if views.mode == "equirect":
+        return source_cache_root
+    view_hash = _short_hash(
+        {
+            "profile_limit_physical_frames": requested_physical_frame_limit(sequence, profile),
+            "views": asdict(views),
+            "jpeg_quality": sequence.extraction.jpeg_quality,
+        }
+    )
+    view_label = _build_view_label(views)
+    return source_cache_root / "views" / f"{view_label}_{view_hash}"
+
+
 def load_runner_context(
     paths_config_path: str | Path,
     sequence_config_path: str | Path,
@@ -243,10 +430,12 @@ def load_runner_context(
     extraction_cfg = seq_cfg.get("extraction", {})
     vggt_cfg = seq_cfg.get("vggt", {})
     export_cfg = seq_cfg.get("export", {})
+    input_cfg = _parse_input_config(seq_cfg)
 
     sequence = SequenceConfig(
         run_name=str(seq_cfg["run_name"]),
-        input=_parse_input_config(seq_cfg),
+        input=input_cfg,
+        views=_parse_views_config(seq_cfg, input_cfg),
         extraction=ExtractionConfig(
             jpeg_quality=int(extraction_cfg.get("jpeg_quality", 95)),
             smoke_frame_count=int(extraction_cfg.get("smoke_frame_count", 96)),
@@ -258,6 +447,7 @@ def load_runner_context(
             min_disparity=float(vggt_cfg.get("min_disparity", 50.0)),
             conf_threshold=float(vggt_cfg.get("conf_threshold", 25.0)),
             lc_thres=float(vggt_cfg.get("lc_thres", 0.95)),
+            disable_flow_keyframes=bool(vggt_cfg.get("disable_flow_keyframes", False)),
             vis_voxel_size=(
                 None if vggt_cfg.get("vis_voxel_size") in (None, "") else float(vggt_cfg["vis_voxel_size"])
             ),
@@ -271,20 +461,49 @@ def load_runner_context(
         ),
     )
 
+    source_label = _infer_source_label(sequence.input.source_path)
+    prepared_root = paths.outputs_root / "prepared" / source_label
+    source_cache_root = derive_source_cache_root(paths, sequence, profile)
+
+    source_frames_dir = source_cache_root / "frames"
+    source_frame_manifest_path = source_cache_root / "frame_manifest.csv"
+    source_metadata_path = source_cache_root / "source_metadata.yaml"
+    source_preview_path = source_cache_root / "frame_preview.jpg"
+    stitch_summary_path = source_cache_root / "stitch_summary.yaml"
+
+    if sequence.views.mode == "equirect":
+        view_cache_root = source_cache_root
+        frames_dir = source_frames_dir
+        frame_manifest_path = source_frame_manifest_path
+        preview_path = source_preview_path
+        view_metadata_path = source_cache_root / "view_metadata.yaml"
+    else:
+        view_cache_root = derive_view_cache_root(paths, sequence, profile)
+        frames_dir = view_cache_root / "frames"
+        frame_manifest_path = view_cache_root / "frame_manifest.csv"
+        preview_path = view_cache_root / "frame_preview.jpg"
+        view_metadata_path = view_cache_root / "view_metadata.yaml"
+
     run_root = paths.outputs_root / "runs" / sequence.run_name
-    frames_dir = run_root / "frames"
     smoke_frames_dir = run_root / "smoke_frames"
     profile_root = run_root / profile
     export_name = f"{sequence.run_name}_smoke.ply" if profile == "smoke" else f"{sequence.run_name}.ply"
 
     layout = LayoutConfig(
         run_root=run_root,
+        prepared_root=prepared_root,
+        source_cache_root=source_cache_root,
+        source_frames_dir=source_frames_dir,
+        source_frame_manifest_path=source_frame_manifest_path,
+        source_metadata_path=source_metadata_path,
+        source_preview_path=source_preview_path,
+        stitch_summary_path=stitch_summary_path,
+        view_cache_root=view_cache_root,
         frames_dir=frames_dir,
         smoke_frames_dir=smoke_frames_dir,
-        frame_manifest_path=run_root / "frame_manifest.csv",
-        source_metadata_path=run_root / "source_metadata.yaml",
-        stitch_summary_path=run_root / "stitch_summary.yaml",
-        preview_path=run_root / "frame_preview.jpg",
+        frame_manifest_path=frame_manifest_path,
+        view_metadata_path=view_metadata_path,
+        preview_path=preview_path,
         profile_root=profile_root,
         image_folder=smoke_frames_dir if profile == "smoke" else frames_dir,
         vggt_output_dir=profile_root / "vggt",
@@ -294,6 +513,7 @@ def load_runner_context(
         export_path=profile_root / "exports" / export_name,
         command_log_path=profile_root / "logs" / "run_vggt.log",
         resolved_config_path=profile_root / "resolved_config.yaml",
+        evaluation_inputs_root=profile_root / "evaluation_inputs",
     )
 
     return RunnerContext(paths=paths, sequence=sequence, layout=layout, profile=profile)
@@ -340,6 +560,30 @@ def validate_context(context: RunnerContext) -> None:
         if input_cfg.sync_tolerance_ns <= 0:
             problems.append("Rosbag input sync_tolerance_ns must be greater than 0")
 
+    views = context.sequence.views
+    if views.max_physical_frames < 0:
+        problems.append("views.max_physical_frames cannot be negative")
+    if views.mode == "equirect":
+        if views.ordering != "frame_major":
+            problems.append("views.ordering=view_major is only supported for multiview pinhole runs")
+    else:
+        if views.width is None or views.width <= 0:
+            problems.append("Non-equirect view preparation requires views.width > 0")
+        if views.height is None or views.height <= 0:
+            problems.append("Non-equirect view preparation requires views.height > 0")
+        if views.fov_deg is None or not (0.0 < views.fov_deg < 180.0):
+            problems.append("Non-equirect view preparation requires 0 < views.fov_deg < 180")
+    if views.mode == "pinhole_level_yaw_imu" and len(views.yaws_deg) < 2:
+        problems.append("pinhole_level_yaw_imu requires at least two yaw angles")
+    if views.ordering == "view_major" and not views.is_multiview:
+        problems.append("views.ordering=view_major is only supported for multiview pinhole runs")
+    if views.requires_imu and not isinstance(input_cfg, RosbagInputConfig):
+        problems.append("IMU-leveled view modes require rosbag input")
+    if views.imu_tau <= 0:
+        problems.append("views.imu_tau must be greater than 0")
+    if views.evaluation_view_index < 0 or views.evaluation_view_index >= views.view_count:
+        problems.append("views.evaluation_view_index must reference an existing view")
+
     if problems:
         raise ValueError("\n".join(problems))
 
@@ -347,11 +591,13 @@ def validate_context(context: RunnerContext) -> None:
 def ensure_layout_dirs(context: RunnerContext) -> None:
     for path in [
         context.paths.outputs_root,
+        context.layout.prepared_root,
         context.layout.run_root,
         context.layout.profile_root,
         context.layout.vggt_output_dir,
         context.layout.export_dir,
         context.layout.command_log_path.parent,
+        context.layout.evaluation_inputs_root,
     ]:
         path.mkdir(parents=True, exist_ok=True)
 

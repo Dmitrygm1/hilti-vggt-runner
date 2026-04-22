@@ -65,6 +65,8 @@ def build_vggt_command(context: RunnerContext) -> list[str]:
     ]
     if context.sequence.vggt.vis_voxel_size is not None:
         command.extend(["--vis_voxel_size", str(context.sequence.vggt.vis_voxel_size)])
+    if context.sequence.vggt.disable_flow_keyframes:
+        command.append("--disable_flow_keyframes")
     return command
 
 
@@ -72,10 +74,11 @@ def _ensure_image_folder_ready(context: RunnerContext) -> None:
     if context.profile == "smoke" and not context.layout.smoke_frames_dir.exists():
         create_smoke_subset(context)
 
-    if context.profile == "full" and context.layout.source_metadata_path.is_file():
-        with context.layout.source_metadata_path.open("r", encoding="utf-8") as handle:
-            source_metadata = yaml.safe_load(handle) or {}
-        if not bool(source_metadata.get("is_complete", False)):
+    metadata_path = context.layout.view_metadata_path if context.layout.view_metadata_path.is_file() else context.layout.source_metadata_path
+    if context.profile == "full" and metadata_path.is_file():
+        with metadata_path.open("r", encoding="utf-8") as handle:
+            preparation_metadata = yaml.safe_load(handle) or {}
+        if not bool(preparation_metadata.get("is_complete", False)):
             raise RuntimeError(
                 "The current prepared frame set is partial and was likely created for a smoke run.\n"
                 "Run prepare_hilti_data.py again with --profile full before launching the full reconstruction."

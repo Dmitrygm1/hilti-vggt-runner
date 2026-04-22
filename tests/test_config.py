@@ -19,6 +19,8 @@ def test_context_expands_envvars_and_builds_layout_for_mp4(tmp_path, monkeypatch
     assert context.layout.run_root == expected_root / "runs" / "floor_UG1_2025-06-18_run_1"
     assert context.layout.image_folder == context.layout.smoke_frames_dir
     assert context.sequence.input.type == "mp4"
+    assert context.sequence.views.mode == "equirect"
+    assert context.layout.source_cache_root.parent == expected_root / "prepared" / "video"
 
 
 def test_context_supports_rosbag_inputs(tmp_path, monkeypatch):
@@ -28,6 +30,7 @@ def test_context_supports_rosbag_inputs(tmp_path, monkeypatch):
     assert context.sequence.input.type == "rosbag"
     assert context.sequence.input.rosbag_db3 == rosbag_path
     assert context.layout.stitch_summary_path.name == "stitch_summary.yaml"
+    assert context.layout.source_frame_manifest_path.name == "frame_manifest.csv"
 
 
 def test_validate_context_fails_for_missing_rosbag_mask(tmp_path, monkeypatch):
@@ -98,3 +101,26 @@ def test_build_vggt_command_includes_headless_logging(tmp_path, monkeypatch):
     assert "--log_results" in command
     assert str(context.layout.image_folder) in command
     assert str(context.layout.log_path) in command
+
+
+def test_build_vggt_command_can_disable_flow_keyframes(tmp_path, monkeypatch):
+    rosbag_path = create_synthetic_rosbag(tmp_path / "run_1" / "rosbag" / "rosbag.db3")
+    context = build_context(
+        tmp_path,
+        monkeypatch,
+        profile="full",
+        input_type="rosbag",
+        rosbag_path=rosbag_path,
+        views={
+            "mode": "pinhole_fixed",
+            "width": 32,
+            "height": 16,
+            "fov_deg": 90.0,
+            "max_physical_frames": 2,
+        },
+        vggt={"disable_flow_keyframes": True},
+    )
+
+    command = build_vggt_command(context)
+
+    assert "--disable_flow_keyframes" in command

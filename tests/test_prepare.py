@@ -11,6 +11,7 @@ from hilti_vggt_runner.prepare import (
     extract_rosbag_frames_for_context,
     extract_video_frames,
     list_image_files,
+    prepare_profile_inputs,
 )
 from hilti_vggt_runner.rosbag import maybe_rotate_image
 
@@ -38,7 +39,8 @@ def test_extract_video_frames_rotates_and_numbers_frames(tmp_path, monkeypatch):
 
     summary = extract_video_frames(context, force=True)
 
-    extracted_frames = list_image_files(context.layout.frames_dir)
+    extracted_frames = list_image_files(context.layout.source_frames_dir)
+    assert summary.physical_frame_count == 2
     assert summary.extracted_frame_count == 2
     assert [path.name for path in extracted_frames] == ["frame_000001.jpg", "frame_000002.jpg"]
 
@@ -47,7 +49,7 @@ def test_extract_video_frames_rotates_and_numbers_frames(tmp_path, monkeypatch):
     top_left_red = float(rotated[0:12, 0:12, 2].mean())
     bottom_right_red = float(rotated[-12:, -12:, 2].mean())
     assert bottom_right_red > top_left_red
-    assert context.layout.preview_path.is_file()
+    assert context.layout.source_preview_path.is_file()
 
 
 def test_create_smoke_subset_uses_symlinks(tmp_path, monkeypatch):
@@ -69,7 +71,8 @@ def test_extract_rosbag_frames_writes_manifest_preview_and_sequential_names(tmp_
 
     summary = extract_rosbag_frames_for_context(context, force=True)
 
-    extracted_frames = list_image_files(context.layout.frames_dir)
+    extracted_frames = list_image_files(context.layout.source_frames_dir)
+    assert summary.physical_frame_count == 3
     assert summary.extracted_frame_count == 3
     assert summary.paired_messages == 3
     assert [path.name for path in extracted_frames] == [
@@ -77,13 +80,117 @@ def test_extract_rosbag_frames_writes_manifest_preview_and_sequential_names(tmp_
         "frame_000002.jpg",
         "frame_000003.jpg",
     ]
-    with context.layout.frame_manifest_path.open("r", encoding="utf-8", newline="") as handle:
+    with context.layout.source_frame_manifest_path.open("r", encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert [row["output_name"] for row in rows] == [path.name for path in extracted_frames]
+    assert [row["view_index"] for row in rows] == ["0", "0", "0"]
     assert all(abs(int(row["sync_delta_ns"])) <= 5_000_000 for row in rows)
-    assert context.layout.frame_manifest_path.is_file()
+    assert context.layout.source_frame_manifest_path.is_file()
     assert context.layout.stitch_summary_path.is_file()
+    assert context.layout.source_preview_path.is_file()
+
+
+def test_prepare_profile_inputs_renders_frame_major_yaw4_sequence(tmp_path, monkeypatch):
+    rosbag_path = create_synthetic_rosbag(tmp_path / "run_1" / "rosbag" / "rosbag.db3", frame_count=3)
+    context = build_context(
+        tmp_path,
+        monkeypatch,
+        profile="full",
+        input_type="rosbag",
+        rosbag_path=rosbag_path,
+        run_name="yaw4_frame_major",
+        views={
+            "mode": "pinhole_level_yaw_imu",
+            "width": 32,
+            "height": 16,
+            "fov_deg": 90.0,
+            "yaws_deg": [0.0, 90.0, 180.0, 270.0],
+            "ordering": "frame_major",
+            "max_physical_frames": 2,
+            "evaluation_view_index": 0,
+        },
+        vggt={"disable_flow_keyframes": True},
+    )
+
+    summary = prepare_profile_inputs(context, force=True)
+
+    frame_paths = list_image_files(context.layout.frames_dir)
+    assert summary.physical_frame_count == 2
+    assert summary.extracted_frame_count == 8
+    assert summary.view_count == 4
+    assert len(frame_paths) == 8
+    assert not frame_paths[0].is_symlink()
+
+    with context.layout.frame_manifest_path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert [row["output_name"] for row in rows] == [path.name for path in frame_paths]
+    assert [row["physical_frame_index"] for row in rows[:4]] == ["1", "1", "1", "1"]
+    assert [row["view_index"] for row in rows[:4]] == ["0", "1", "2", "3"]
+    assert [row["is_eval_primary"] for row in rows[:4]] == ["1", "0", "0", "0"]
     assert context.layout.preview_path.is_file()
+
+
+def test_prepare_profile_inputs_view_major_reorders_without_copying_images(tmp_path, monkeypatch):
+    rosbag_path = create_synthetic_rosbag(tmp_path / "run_1" / "rosbag" / "rosbag.db3", frame_count=3)
+    context = build_context(
+        tmp_path,
+        monkeypatch,
+        profile="full",
+        input_type="rosbag",
+        rosbag_path=rosbag_path,
+        run_name="yaw4_view_major",
+        views={
+            "mode": "pinhole_level_yaw_imu",
+            "width": 32,
+            "height": 16,
+            "fov_deg": 90.0,
+            "yaws_deg": [0.0, 90.0, 180.0, 270.0],
+            "ordering": "view_major",
+            "max_physical_frames": 2,
+            "evaluation_view_index": 0,
+        },
+        vggt={"disable_flow_keyframes": True},
+    )
+
+    summary = prepare_profile_inputs(context, force=True)
+
+    frame_paths = list_image_files(context.layout.frames_dir)
+    assert summary.extracted_frame_count == 8
+    assert all(path.is_symlink() for path in frame_paths)
+
+    with context.layout.frame_manifest_path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert [row["view_index"] for row in rows[:4]] == ["0", "0", "1", "1"]
+    assert [row["physical_frame_index"] for row in rows[:4]] == ["1", "2", "1", "2"]
+
+
+def test_smoke_subset_keeps_all_views_for_selected_physical_frames(tmp_path, monkeypatch):
+    rosbag_path = create_synthetic_rosbag(tmp_path / "run_1" / "rosbag" / "rosbag.db3", frame_count=3)
+    context = build_context(
+        tmp_path,
+        monkeypatch,
+        profile="smoke",
+        input_type="rosbag",
+        rosbag_path=rosbag_path,
+        run_name="yaw4_smoke",
+        views={
+            "mode": "pinhole_level_yaw_imu",
+            "width": 32,
+            "height": 16,
+            "fov_deg": 90.0,
+            "yaws_deg": [0.0, 90.0, 180.0, 270.0],
+            "ordering": "frame_major",
+            "max_physical_frames": 3,
+            "evaluation_view_index": 0,
+        },
+        extraction={"smoke_frame_count": 1},
+    )
+
+    prepare_profile_inputs(context, force=True)
+    smoke_frames = list_image_files(context.layout.smoke_frames_dir)
+
+    assert len(smoke_frames) == 4
+    assert all(path.is_symlink() for path in smoke_frames)
 
 
 def test_maybe_rotate_image_rotates_180():

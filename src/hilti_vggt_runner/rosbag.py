@@ -529,9 +529,12 @@ def extract_rosbag_frames(config: RosbagStitchConfig) -> RosbagExtractionSummary
             manifest_rows.append(
                 {
                     "frame_index": extracted_count,
+                    "physical_frame_index": extracted_count,
+                    "view_index": 0,
                     "cam0_timestamp_ns": pair.cam0_timestamp_ns,
                     "cam1_timestamp_ns": pair.cam1_timestamp_ns,
                     "sync_delta_ns": pair.cam0_timestamp_ns - pair.cam1_timestamp_ns,
+                    "is_eval_primary": 1,
                     "output_name": output_name,
                 }
             )
@@ -544,7 +547,16 @@ def extract_rosbag_frames(config: RosbagStitchConfig) -> RosbagExtractionSummary
     with config.frame_manifest_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["frame_index", "cam0_timestamp_ns", "cam1_timestamp_ns", "sync_delta_ns", "output_name"],
+            fieldnames=[
+                "frame_index",
+                "physical_frame_index",
+                "view_index",
+                "cam0_timestamp_ns",
+                "cam1_timestamp_ns",
+                "sync_delta_ns",
+                "is_eval_primary",
+                "output_name",
+            ],
         )
         writer.writeheader()
         writer.writerows(manifest_rows)

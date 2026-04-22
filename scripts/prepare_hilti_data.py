@@ -30,6 +30,7 @@ def main() -> None:
     print(f"Prepared profile: {args.profile}")
     print(f"Input type: {context.sequence.input.type}")
     print(f"Source path: {context.sequence.input.source_path}")
+    print(f"View mode: {context.sequence.views.mode}")
     if summary.metadata is not None:
         print(
             "Video metadata: "
@@ -49,9 +50,16 @@ def main() -> None:
             f"stride={summary.stride}, "
             f"paired={summary.paired_messages}, "
             f"sampled={summary.sampled_pairs}, "
-            f"frames={summary.extracted_frame_count}, "
+            f"physical_frames={summary.physical_frame_count}, "
             f"output={summary.output_width}x{summary.output_height}"
         )
+    print(
+        "Prepared sequence: "
+        f"physical_frames={summary.physical_frame_count}, "
+        f"emitted_frames={summary.extracted_frame_count}, "
+        f"views_per_physical={summary.view_count}"
+    )
+    print(f"Source frames: {context.layout.source_frames_dir}")
     print(f"Canonical frames: {context.layout.frames_dir}")
     if context.profile == "smoke":
         print(f"Smoke subset: {context.layout.smoke_frames_dir}")
@@ -59,8 +67,8 @@ def main() -> None:
     print(f"Preview: {context.layout.preview_path}")
     if context.sequence.input.type == "rosbag":
         print(f"Stitch summary: {context.layout.stitch_summary_path}")
-    else:
-        print(f"Source metadata: {context.layout.source_metadata_path}")
+    print(f"Source metadata: {context.layout.source_metadata_path}")
+    print(f"View metadata: {context.layout.view_metadata_path}")
 
 
 if __name__ == "__main__":

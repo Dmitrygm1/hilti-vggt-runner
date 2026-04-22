@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import struct
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +82,23 @@ def create_synthetic_rosbag(path: Path, *, frame_count: int = 4, sync_delta_ns: 
             "INSERT INTO topics(id, name, type, serialization_format, offered_qos_profiles) VALUES (?, ?, ?, ?, ?)",
             (2, "/cam1/image_raw/compressed", "sensor_msgs/msg/CompressedImage", "cdr", ""),
         )
+        conn.execute(
+            "INSERT INTO topics(id, name, type, serialization_format, offered_qos_profiles) VALUES (?, ?, ?, ?, ?)",
+            (3, "/imu/data_raw", "sensor_msgs/msg/Imu", "cdr", ""),
+        )
+
+        def _encode_imu(timestamp_ns: int, accel: tuple[float, float, float]) -> bytes:
+            sec = int(timestamp_ns // 1_000_000_000)
+            nsec = int(timestamp_ns % 1_000_000_000)
+            payload = bytearray(b"\x00\x00\x00\x00")
+            payload.extend(struct.pack("<iI", sec, nsec))
+            payload.extend(struct.pack("<I", 0))
+            payload.extend(struct.pack("<4d", 0.0, 0.0, 0.0, 1.0))
+            payload.extend(struct.pack("<9d", *([0.0] * 9)))
+            payload.extend(struct.pack("<3d", 0.0, 0.0, 0.0))
+            payload.extend(struct.pack("<9d", *([0.0] * 9)))
+            payload.extend(struct.pack("<3d", *accel))
+            return bytes(payload)
 
         for index in range(frame_count):
             image0 = np.zeros((32, 32, 3), dtype=np.uint8)
@@ -106,6 +124,15 @@ def create_synthetic_rosbag(path: Path, *, frame_count: int = 4, sync_delta_ns: 
                 (2, timestamp1, sqlite3.Binary(b"prefix" + encoded1.tobytes())),
             )
 
+            imu_base = timestamp0 - 5_000_000
+            for imu_index in range(4):
+                imu_timestamp = imu_base + imu_index * 2_500_000
+                imu_blob = _encode_imu(imu_timestamp, (0.0, 9.81, 0.0))
+                conn.execute(
+                    "INSERT INTO messages(topic_id, timestamp, data) VALUES (?, ?, ?)",
+                    (3, imu_timestamp, sqlite3.Binary(imu_blob)),
+                )
+
         conn.commit()
     finally:
         conn.close()
@@ -120,6 +147,10 @@ def build_context(
     input_type: str = "mp4",
     source_video_path: Path | None = None,
     rosbag_path: Path | None = None,
+    run_name: str = "floor_UG1_2025-06-18_run_1",
+    views: dict[str, Any] | None = None,
+    vggt: dict[str, Any] | None = None,
+    extraction: dict[str, Any] | None = None,
 ) -> RunnerContext:
     home_root = tmp_path / "home"
     scratch_root = tmp_path / "scratch"
@@ -154,7 +185,7 @@ def build_context(
     )
 
     sequence_payload: dict[str, Any] = {
-        "run_name": "floor_UG1_2025-06-18_run_1",
+        "run_name": run_name,
         "extraction": {
             "jpeg_quality": 95,
             "smoke_frame_count": 1,
@@ -200,6 +231,13 @@ def build_context(
         }
     else:
         raise ValueError(f"Unsupported input_type for tests: {input_type}")
+
+    if views:
+        sequence_payload["views"] = views
+    if vggt:
+        sequence_payload["vggt"].update(vggt)
+    if extraction:
+        sequence_payload["extraction"].update(extraction)
 
     write_yaml(sequence_path, sequence_payload)
 

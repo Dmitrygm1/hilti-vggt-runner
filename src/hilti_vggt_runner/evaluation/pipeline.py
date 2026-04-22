@@ -11,15 +11,17 @@ from .config import EvaluationConfig, ResolvedRunConfig
 from .floorplan import FloorplanEvaluationResult, evaluate_floorplan_consistency, load_floorplan
 from .plotting import (
     plot_best_fit_trajectory,
-    plot_error_histogram,
-    plot_error_timeseries,
     plot_floorplan_overlay_eval_resolution,
-    plot_rpe_timeseries,
+    plot_rpe_rotation_timeseries,
+    plot_rpe_translation_timeseries,
+    plot_translation_error_histogram,
+    plot_translation_error_timeseries,
     plot_wall_consistency_overlay,
 )
 from .poses import EstimatedPoseLoadSummary, load_estimated_pose_sequence, load_init_pose, load_tum_pose_sequence
 from .report import write_markdown_report, write_matched_poses_csv, write_metrics_csv, write_metrics_json
 from .trajectory import SequenceHealth, TrajectoryEvaluation, compute_sequence_health, evaluate_trajectory_modes
+from ..views import read_frame_manifest
 
 
 @dataclass(frozen=True)
@@ -35,9 +37,12 @@ class EvaluationResult:
 def _collect_plot_paths(artifacts: RunArtifacts) -> dict[str, Path]:
     return {
         "trajectory_best_fit": artifacts.plots_dir / "trajectory_xy_best_fit.png",
-        "translation_error_vs_time": artifacts.plots_dir / "translation_error_vs_time.png",
-        "translation_error_histogram": artifacts.plots_dir / "translation_error_histogram.png",
-        "rpe_vs_time": artifacts.plots_dir / "rpe_vs_time.png",
+        "translation_error_3d_vs_time": artifacts.plots_dir / "translation_error_3d_vs_time.png",
+        "translation_error_xy_vs_time": artifacts.plots_dir / "translation_error_xy_vs_time.png",
+        "translation_error_3d_histogram": artifacts.plots_dir / "translation_error_3d_histogram.png",
+        "translation_error_xy_histogram": artifacts.plots_dir / "translation_error_xy_histogram.png",
+        "rpe_translation_m_vs_index": artifacts.plots_dir / "rpe_translation_m_vs_index.png",
+        "rpe_rotation_deg_vs_index": artifacts.plots_dir / "rpe_rotation_deg_vs_index.png",
         "floorplan_overlay": artifacts.plots_dir / "floorplan_overlay.png",
         "wall_consistency_overlay": artifacts.plots_dir / "wall_consistency_overlay.png",
     }
@@ -53,7 +58,23 @@ def _format_metric(value: Any, *, precision: int = 3) -> str:
     return str(value)
 
 
+def _assert_single_view_manifest(resolved: ResolvedRunConfig) -> None:
+    records = read_frame_manifest(resolved.frame_manifest_path)
+    view_indices = {record.view_index for record in records}
+    if len(view_indices) <= 1:
+        return
+    raise RuntimeError(
+        "This resolved config still points at a multiview manifest.\n"
+        "Derive one evaluation trajectory first, for example:\n"
+        "python scripts/evaluation/prepare_multiview_eval_inputs.py "
+        f"--resolved-config {resolved.resolved_config_path}\n"
+        "Then evaluate using the derived resolved_config.yaml under "
+        "<profile_root>/evaluation_inputs/view_XX/."
+    )
+
+
 def run_evaluation(resolved: ResolvedRunConfig, evaluation: EvaluationConfig) -> EvaluationResult:
+    _assert_single_view_manifest(resolved)
     artifacts = load_run_artifacts(resolved, evaluation)
     ensure_artifact_dirs(artifacts)
 
@@ -110,9 +131,12 @@ def run_evaluation(resolved: ResolvedRunConfig, evaluation: EvaluationConfig) ->
     if "rigid_se3" in trajectory_evaluations:
         best_fit = trajectory_evaluations["rigid_se3"]
         plot_best_fit_trajectory(best_fit, plot_paths["trajectory_best_fit"])
-        plot_error_timeseries(best_fit, plot_paths["translation_error_vs_time"])
-        plot_error_histogram(best_fit, plot_paths["translation_error_histogram"])
-        plot_rpe_timeseries(best_fit, plot_paths["rpe_vs_time"])
+        plot_translation_error_timeseries(best_fit, plot_paths["translation_error_3d_vs_time"], component="3d")
+        plot_translation_error_timeseries(best_fit, plot_paths["translation_error_xy_vs_time"], component="xy")
+        plot_translation_error_histogram(best_fit, plot_paths["translation_error_3d_histogram"], component="3d")
+        plot_translation_error_histogram(best_fit, plot_paths["translation_error_xy_histogram"], component="xy")
+        plot_rpe_translation_timeseries(best_fit, plot_paths["rpe_translation_m_vs_index"])
+        plot_rpe_rotation_timeseries(best_fit, plot_paths["rpe_rotation_deg_vs_index"])
         write_matched_poses_csv(
             artifacts.matched_poses_csv_path,
             timestamps=best_fit.aligned_estimated.timestamps.tolist(),
