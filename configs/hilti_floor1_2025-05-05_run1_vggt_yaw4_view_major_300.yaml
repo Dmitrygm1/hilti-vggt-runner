@@ -1,0 +1,46 @@
+run_name: floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300
+
+input:
+  type: rosbag
+  rosbag_db3: /work/scratch/${USER}/hilti-2026/raw/floor_1/2025-05-05/run_1/rosbag/rosbag.db3
+  calibration_yaml: ${HOME}/projects/hilti-trimble-slam-challenge-2026/config/hilti_openvins/kalibr_imucam_chain.yaml
+  mask0: ${HOME}/projects/hilti-trimble-slam-challenge-2026/config/hilti_openvins/mask_cam0.png
+  mask1: ${HOME}/projects/hilti-trimble-slam-challenge-2026/config/hilti_openvins/mask_cam1.png
+  sphere_m: 10.0
+  stride: 10
+  max_frames: 0
+  rotate_180: true
+  sync_tolerance_ns: 5000000
+
+views:
+  mode: pinhole_level_yaw_imu
+  width: 768
+  height: 512
+  fov_deg: 90.0
+  yaws_deg: [0.0, 90.0, 180.0, 270.0]
+  ordering: view_major
+  rotate_180: false
+  imu_tau: 0.25
+  time_offset_ns: 0
+  use_yaml_timeshift: false
+  max_physical_frames: 300
+  evaluation_view_index: 0
+
+extraction:
+  jpeg_quality: 95
+  smoke_frame_count: 60
+
+vggt:
+  submap_size: 16
+  overlapping_window_size: 1
+  max_loops: 0
+  min_disparity: 50.0
+  conf_threshold: 25.0
+  lc_thres: 0.95
+  disable_flow_keyframes: true
+  vis_voxel_size:
+
+export:
+  voxel_size: 0.02
+  nb_neighbors: 20
+  std_ratio: 2.0

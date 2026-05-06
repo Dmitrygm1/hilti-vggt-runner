@@ -1,5 +1,6 @@
 eval_name: supervisor_june18_localization
 run_name: floor_UG1_2025-06-18_run_1_rosbag_dense
+no_full_gt: true
 
 ground_truth:
   lookup_run_name: floor_UG1_2025-06-18_run_1

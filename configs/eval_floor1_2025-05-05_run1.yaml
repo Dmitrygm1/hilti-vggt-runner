@@ -1,7 +1,8 @@
 eval_name: supervisor_gt_reference
-run_name: floor_1_2025-05-05_run_1
+no_full_gt: false
 
 ground_truth:
+  lookup_run_name: floor_1_2025-05-05_run_1
   trajectory_txt: ${HOME}/projects/hilti-trimble-slam-challenge-2026/groundtruth/floor_1_2025-05-05_run_1.txt
   init_pose_csv: ${HOME}/projects/hilti-trimble-slam-challenge-2026/groundtruth/init_gt_poses.csv
 

@@ -40,6 +40,7 @@ def _apply_mode_overrides(config: EvaluationConfig, *, trajectory_only: bool, fl
     if floorplan_only:
         return replace(
             config,
+            no_full_gt=True,
             ground_truth=replace(config.ground_truth, trajectory_txt=None),
         )
     return config

@@ -12,6 +12,7 @@ class RunArtifacts:
     evaluation: EvaluationConfig
     output_dir: Path
     plots_dir: Path
+    aligned_pointcloud_dir: Path
     metrics_json_path: Path
     metrics_csv_path: Path
     matched_poses_csv_path: Path
@@ -25,6 +26,7 @@ def load_run_artifacts(resolved: ResolvedRunConfig, evaluation: EvaluationConfig
         evaluation=evaluation,
         output_dir=output_dir,
         plots_dir=output_dir / "plots",
+        aligned_pointcloud_dir=output_dir / "aligned_pointclouds",
         metrics_json_path=output_dir / "metrics.json",
         metrics_csv_path=output_dir / "metrics.csv",
         matched_poses_csv_path=output_dir / "matched_poses.csv",
@@ -33,5 +35,5 @@ def load_run_artifacts(resolved: ResolvedRunConfig, evaluation: EvaluationConfig
 
 
 def ensure_artifact_dirs(artifacts: RunArtifacts) -> None:
-    for path in [artifacts.output_dir, artifacts.plots_dir]:
+    for path in [artifacts.output_dir, artifacts.plots_dir, artifacts.aligned_pointcloud_dir]:
         path.mkdir(parents=True, exist_ok=True)

@@ -78,20 +78,23 @@ Core configs:
 
 Reconstruction configs:
 
-- [`configs/hilti_floor_ug1_run1.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1.yaml): MP4 baseline for UG1
-- [`configs/hilti_floor1_2025-05-05_run1.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor1_2025-05-05_run1.yaml): GT-backed floor 1 reference run
-- [`configs/hilti_floor_ug1_run1_rosbag.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_rosbag.yaml): rosbag parity run
-- [`configs/hilti_floor_ug1_run1_rosbag_dense.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_rosbag_dense.yaml): denser rosbag run
-- [`configs/hilti_floor_ug1_run1_vggt_front_fixed_300.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_vggt_front_fixed_300.yaml): fixed front pinhole baseline from rosbag panoramas
-- [`configs/hilti_floor_ug1_run1_vggt_front_level_300.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_vggt_front_level_300.yaml): IMU-leveled front pinhole baseline
-- [`configs/hilti_floor_ug1_run1_vggt_yaw4_frame_major_300.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_vggt_yaw4_frame_major_300.yaml): IMU-leveled 4-view pinhole sequence in `frame0_v0, frame0_v1, ...` order
-- [`configs/hilti_floor_ug1_run1_vggt_yaw4_view_major_300.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_vggt_yaw4_view_major_300.yaml): same 4-view sequence reordered into `all_v0, all_v1, ...`
+- [`configs/hilti_floor1_2025-05-05_run1.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor1_2025-05-05_run1.yaml): GT-backed floor 1 MP4 reference run
+- [`configs/hilti_floor1_2025-05-05_run1_vggt_front_level_300.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor1_2025-05-05_run1_vggt_front_level_300.yaml): Floor 1 rosbag, IMU-leveled front pinhole baseline
+- [`configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_frame_major_300.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_frame_major_300.yaml): Floor 1 rosbag, IMU-leveled 4-view pinhole sequence in `frame0_v0, frame0_v1, ...` order
+- [`configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_view_major_300.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_view_major_300.yaml): Floor 1 rosbag, same 4-view sequence reordered into `all_v0, all_v1, ...`
+- [`configs/hilti_floor_ug1_run1.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1.yaml): UG1 MP4 debug baseline without full GT
+- [`configs/hilti_floor_ug1_run1_rosbag.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_rosbag.yaml): UG1 rosbag parity/debug run without full GT
+- [`configs/hilti_floor_ug1_run1_rosbag_dense.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_rosbag_dense.yaml): denser UG1 rosbag debug run without full GT
+- [`configs/hilti_floor_ug1_run1_vggt_front_fixed_300.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_vggt_front_fixed_300.yaml): UG1 fixed front pinhole debug baseline
+- [`configs/hilti_floor_ug1_run1_vggt_front_level_300.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_vggt_front_level_300.yaml): UG1 IMU-leveled front pinhole debug baseline
+- [`configs/hilti_floor_ug1_run1_vggt_yaw4_frame_major_300.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_vggt_yaw4_frame_major_300.yaml): UG1 IMU-leveled 4-view debug run in `frame0_v0, frame0_v1, ...` order
+- [`configs/hilti_floor_ug1_run1_vggt_yaw4_view_major_300.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/hilti_floor_ug1_run1_vggt_yaw4_view_major_300.yaml): UG1 4-view debug run reordered into `all_v0, all_v1, ...`
 
 Evaluation configs:
 
 - [`configs/eval_floor1_2025-05-05_run1.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/eval_floor1_2025-05-05_run1.yaml): full GT trajectory + floor-plan evaluation for floor 1
-- [`configs/eval_floor_ug1_2025-06-18_run1_rosbag_dense.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/eval_floor_ug1_2025-06-18_run1_rosbag_dense.yaml): init-pose and floor-plan evaluation for June 18 UG1
-- [`configs/eval_floor_ug1_2025-06-18_multiview.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/eval_floor_ug1_2025-06-18_multiview.yaml): init-pose and floor-plan evaluation for the new multiview VGGT runs
+- [`configs/eval_floor_ug1_2025-06-18_run1_rosbag_dense.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/eval_floor_ug1_2025-06-18_run1_rosbag_dense.yaml): init-pose and floor-plan debug evaluation for June 18 UG1, marked `no_full_gt: true`
+- [`configs/eval_floor_ug1_2025-06-18_multiview.yaml`](/home/drudshin/projects/hilti-vggt-runner/configs/eval_floor_ug1_2025-06-18_multiview.yaml): init-pose and floor-plan debug evaluation for UG1 multiview runs, marked `no_full_gt: true`
 
 Sequence configs use `input.type`:
 
@@ -116,30 +119,33 @@ The reconstruction workflow is always the same three steps:
 2. Run `VGGT-SLAM`
 3. Export the logged framewise point clouds to `.ply`
 
-Example with the GT-backed floor 1 run:
+Primary full-GT experiment, using the DA3-style Floor 1 rosbag yaw4 view-major config:
 
 ```bash
 python scripts/prepare_hilti_data.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor1_2025-05-05_run1.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_view_major_300.yaml \
   --profile full
 
 python scripts/run_vggt_on_sequence.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor1_2025-05-05_run1.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_view_major_300.yaml \
   --profile full
 
 python scripts/export_results.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor1_2025-05-05_run1.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_view_major_300.yaml \
   --profile full
+
+python scripts/evaluation/prepare_multiview_eval_inputs.py \
+  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300/full/resolved_config.yaml
 ```
 
 Then evaluate:
 
 ```bash
 python scripts/evaluation/run_full_evaluation.py \
-  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1/full/resolved_config.yaml \
+  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300/full/evaluation_inputs/view_00/resolved_config.yaml \
   --eval-config configs/eval_floor1_2025-05-05_run1.yaml
 ```
 
@@ -211,11 +217,13 @@ python scripts/export_results.py \
 
 The rosbag path exists because the vendor MP4 and the stitched raw bag are meaningfully different inputs. It lets us test whether calibrated dual-fisheye stitching gives `VGGT-SLAM` a better chance than the delivered equirectangular video.
 
-The committed rosbag configs currently point at:
+The primary Floor 1 rosbag configs expect:
 
 ```text
-/work/scratch/$USER/hilti-2026/raw/floor_UG1/2025-06-18/run_1/rosbag/rosbag.db3
+/work/scratch/$USER/hilti-2026/raw/floor_1/2025-05-05/run_1/rosbag/rosbag.db3
 ```
+
+The UG1 rosbag configs still exist, but they are debug/no-full-GT baselines. They should not be used for supervisor-facing trajectory metrics unless a matching full GT trajectory is added later.
 
 The runner uses the challenge repo calibration and masks:
 
@@ -306,46 +314,26 @@ Important implementation details:
 
 Recommended sequence order:
 
-1. `front_fixed`
-2. `front_level`
-3. `yaw4_frame_major`
-4. `yaw4_view_major`
-
-#### Front Fixed Smoke
-
-```bash
-python scripts/prepare_hilti_data.py \
-  --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_front_fixed_300.yaml \
-  --profile smoke
-
-python scripts/run_vggt_on_sequence.py \
-  --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_front_fixed_300.yaml \
-  --profile smoke
-
-python scripts/export_results.py \
-  --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_front_fixed_300.yaml \
-  --profile smoke
-```
+1. `front_level`
+2. `yaw4_frame_major`
+3. `yaw4_view_major`
 
 #### Front Level Smoke
 
 ```bash
 python scripts/prepare_hilti_data.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_front_level_300.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_front_level_300.yaml \
   --profile smoke
 
 python scripts/run_vggt_on_sequence.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_front_level_300.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_front_level_300.yaml \
   --profile smoke
 
 python scripts/export_results.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_front_level_300.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_front_level_300.yaml \
   --profile smoke
 ```
 
@@ -354,17 +342,17 @@ python scripts/export_results.py \
 ```bash
 python scripts/prepare_hilti_data.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_yaw4_frame_major_300.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_frame_major_300.yaml \
   --profile full
 
 python scripts/run_vggt_on_sequence.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_yaw4_frame_major_300.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_frame_major_300.yaml \
   --profile full
 
 python scripts/export_results.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_yaw4_frame_major_300.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_frame_major_300.yaml \
   --profile full
 ```
 
@@ -373,19 +361,21 @@ python scripts/export_results.py \
 ```bash
 python scripts/prepare_hilti_data.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_yaw4_view_major_300.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_view_major_300.yaml \
   --profile full
 
 python scripts/run_vggt_on_sequence.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_yaw4_view_major_300.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_view_major_300.yaml \
   --profile full
 
 python scripts/export_results.py \
   --paths configs/local_paths.yaml \
-  --sequence configs/hilti_floor_ug1_run1_vggt_yaw4_view_major_300.yaml \
+  --sequence configs/hilti_floor1_2025-05-05_run1_vggt_yaw4_view_major_300.yaml \
   --profile full
 ```
+
+Use the UG1 multiview configs only for qualitative/no-full-GT debugging.
 
 ### Standalone Rosbag Stitcher
 
@@ -465,6 +455,10 @@ Typical run layout:
           metrics.csv
           matched_poses.csv
           plots/*.png
+          aligned_pointclouds/
+            aligned_init_anchor.ply
+            aligned_rigid_se3.ply
+            aligned_sim3_diagnostic.ply
 ```
 
 ## Evaluation
@@ -483,7 +477,7 @@ Important artifact semantics:
 
 ```bash
 python scripts/evaluation/run_full_evaluation.py \
-  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1/full/resolved_config.yaml \
+  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300/full/evaluation_inputs/view_00/resolved_config.yaml \
   --eval-config configs/eval_floor1_2025-05-05_run1.yaml
 ```
 
@@ -491,7 +485,7 @@ python scripts/evaluation/run_full_evaluation.py \
 
 ```bash
 python scripts/evaluation/evaluate_trajectory.py \
-  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1/full/resolved_config.yaml \
+  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300/full/evaluation_inputs/view_00/resolved_config.yaml \
   --eval-config configs/eval_floor1_2025-05-05_run1.yaml
 ```
 
@@ -509,7 +503,7 @@ For the yaw4 runs, do not evaluate the raw multiview manifest directly. The eval
 
 ```bash
 python scripts/evaluation/prepare_multiview_eval_inputs.py \
-  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_UG1_2025-06-18_run_1_vggt_yaw4_view_major_300/full/resolved_config.yaml
+  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300/full/resolved_config.yaml
 ```
 
 That writes a derived config under:
@@ -522,8 +516,8 @@ Then evaluate using the derived config:
 
 ```bash
 python scripts/evaluation/run_full_evaluation.py \
-  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_UG1_2025-06-18_run_1_vggt_yaw4_view_major_300/full/evaluation_inputs/view_00/resolved_config.yaml \
-  --eval-config configs/eval_floor_ug1_2025-06-18_multiview.yaml
+  --resolved-config /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300/full/evaluation_inputs/view_00/resolved_config.yaml \
+  --eval-config configs/eval_floor1_2025-05-05_run1.yaml
 ```
 
 ### Evaluation Outputs
@@ -548,11 +542,18 @@ Typical files:
 - `plots/rpe_translation_m_vs_index.png`
 - `plots/rpe_rotation_deg_vs_index.png`
 - `plots/floorplan_overlay.png`
+- `plots/pointcloud_floorplan_overlay.png`
 - `plots/wall_consistency_overlay.png`
+- `aligned_pointclouds/aligned_init_anchor.ply`
+- `aligned_pointclouds/aligned_rigid_se3.ply`
+- `aligned_pointclouds/aligned_sim3_diagnostic.ply`
+
+The exported reconstruction PLY under `exports/` is in the raw VGGT reconstruction frame. The `aligned_pointclouds/aligned_*.ply` files are copies transformed into the same map/GT frames used by the named evaluation modes. Use those aligned PLYs when comparing against floorplans or trajectory metrics; use the raw export for method-debug CloudCompare inspection.
 
 ### Current Evaluation Scope
 
-- `floor_1_2025-05-05_run_1`: full GT trajectory evaluation plus floor-plan consistency
+- `floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300`: primary full-GT trajectory evaluation plus floor-plan consistency
+- `floor_1_2025-05-05_run_1`: MP4 fallback baseline with full GT trajectory evaluation plus floor-plan consistency
 - `floor_UG1_2025-06-18_run_1_rosbag_dense`: init-pose anchor plus floor-plan consistency only
 
 The June 18 run has an init pose in `init_gt_poses.csv`, but there is no released full GT trajectory txt for it in the checked-out challenge repo.
@@ -711,6 +712,7 @@ The plots are intended to complement the numbers:
 | `rpe_translation_m_vs_index.png` | Short-horizon local translation drift over the matched pose pairs. |
 | `rpe_rotation_deg_vs_index.png` | Short-horizon local rotation drift over the matched pose pairs. |
 | `floorplan_overlay.png` | Anchored trajectory and evidence over the floor plan. Good first visual for supervisor review. |
+| `pointcloud_floorplan_overlay.png` | Projected point evidence from the same transform and filters used by the floorplan metrics. |
 | `wall_consistency_overlay.png` | Which evidence agrees with the floor plan and which parts do not. |
 
 ### 6. What To Put In Front Of A Supervisor
@@ -732,6 +734,7 @@ For the June 18 UG1 dense run specifically, be explicit that:
 
 - The evaluator does not use the official challenge coverage score as a headline metric because the VGGT pipeline outputs sparse keyframe poses by design.
 - MP4 GT evaluation assumes `absolute_start_time_seconds + frame_manifest timestamp_seconds`; for the Hilti reference videos this is configured as `10000.0` seconds based on the challenge README.
+- Floorplan plots are not screenshots of the CloudCompare PLY. They project point evidence after the selected evaluation transform, height band, minimum point-count filter, and vertical-extent filter.
 - Floor-plan consistency is an as-planned consistency check, not authoritative as-built truth.
 - Dual-fisheye to equirectangular stitching is only approximate because the two physical cameras do not share one optical center.
 
@@ -743,11 +746,11 @@ For a headless sanity check:
 
 ```bash
 python scripts/inspect_pointcloud.py \
-  /work/scratch/$USER/hilti-vggt/runs/floor_UG1_2025-06-18_run_1_rosbag_dense/full/exports/floor_UG1_2025-06-18_run_1_rosbag_dense.ply \
-  --preview-path /work/scratch/$USER/hilti-vggt/runs/floor_UG1_2025-06-18_run_1_rosbag_dense/full/exports/floor_UG1_2025-06-18_run_1_rosbag_dense_preview.png
+  /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300/full/exports/floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300.ply \
+  --preview-path /work/scratch/$USER/hilti-vggt/runs/floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300/full/exports/floor_1_2025-05-05_run_1_vggt_yaw4_view_major_300_preview.png
 ```
 
-For interactive viewing, copy the `.ply` locally and open it in CloudCompare or MeshLab.
+For interactive viewing, copy the `.ply` locally and open it in CloudCompare or MeshLab. Use the raw `exports/*.ply` to inspect VGGT's reconstruction frame. Use `evaluation/<eval_name>/aligned_pointclouds/aligned_*.ply` when you want the same coordinate frame used by metrics and floorplan overlays.
 
 ## Notes
 

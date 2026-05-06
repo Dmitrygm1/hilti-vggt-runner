@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from .config import RunnerContext, ensure_layout_dirs, write_resolved_config
+from .config import RunnerContext, ensure_layout_dirs, requested_physical_frame_limit, write_resolved_config
 from .prepare import create_smoke_subset, list_image_files
 
 
@@ -70,6 +70,36 @@ def build_vggt_command(context: RunnerContext) -> list[str]:
     return command
 
 
+def _as_positive_int(value: object) -> int:
+    if value in (None, ""):
+        return 0
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
+
+
+def metadata_matches_configured_full_limit(context: RunnerContext, metadata: dict[str, object]) -> bool:
+    requested_limit = requested_physical_frame_limit(context.sequence, context.profile)
+    if requested_limit <= 0:
+        return False
+
+    metadata_limit = _as_positive_int(metadata.get("requested_physical_frame_limit"))
+    if metadata_limit != requested_limit:
+        return False
+
+    physical_frames = _as_positive_int(metadata.get("physical_frames")) or _as_positive_int(metadata.get("extracted_frames"))
+    if physical_frames < requested_limit:
+        return False
+
+    extracted_frames = _as_positive_int(metadata.get("extracted_frames"))
+    view_count = _as_positive_int(metadata.get("view_count")) or context.sequence.views.view_count
+    if "physical_frames" in metadata and extracted_frames < requested_limit * view_count:
+        return False
+
+    return True
+
+
 def _ensure_image_folder_ready(context: RunnerContext) -> None:
     if context.profile == "smoke" and not context.layout.smoke_frames_dir.exists():
         create_smoke_subset(context)
@@ -78,10 +108,14 @@ def _ensure_image_folder_ready(context: RunnerContext) -> None:
     if context.profile == "full" and metadata_path.is_file():
         with metadata_path.open("r", encoding="utf-8") as handle:
             preparation_metadata = yaml.safe_load(handle) or {}
-        if not bool(preparation_metadata.get("is_complete", False)):
+        if not bool(preparation_metadata.get("is_complete", False)) and not metadata_matches_configured_full_limit(
+            context,
+            preparation_metadata,
+        ):
             raise RuntimeError(
                 "The current prepared frame set is partial and was likely created for a smoke run.\n"
-                "Run prepare_hilti_data.py again with --profile full before launching the full reconstruction."
+                "Run prepare_hilti_data.py again with --profile full before launching the full reconstruction.\n"
+                "If this is an intentionally capped full run, make sure views.max_physical_frames matches the prepared metadata."
             )
 
     image_files = list_image_files(context.layout.image_folder)

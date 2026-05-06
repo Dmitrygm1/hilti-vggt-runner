@@ -45,6 +45,7 @@ class TrajectoryEvaluation:
     rpe_translation_m: np.ndarray
     rpe_rotation_deg: np.ndarray
     metrics: dict[str, float | int | str]
+    transform: SimilarityTransform | None = None
     anchor: InitAnchorResult | None = None
 
 
@@ -194,7 +195,8 @@ def _evaluate_alignment(
             mode=anchor_mode,
             max_timestamp_delta_seconds=init_anchor_tolerance_seconds,
         )
-        aligned = apply_similarity_to_pose_sequence(estimated, anchor_result.transform)
+        transform = anchor_result.transform
+        aligned = apply_similarity_to_pose_sequence(estimated, transform)
         metrics = {
             "alignment_mode": mode,
             "alignment_scale": 1.0,
@@ -232,6 +234,7 @@ def _evaluate_alignment(
         rpe_translation_m=rpe_translation,
         rpe_rotation_deg=rpe_rotation,
         metrics=metrics,
+        transform=transform,
         anchor=anchor_result,
     )
 

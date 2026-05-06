@@ -93,6 +93,7 @@ class FloorplanConfig:
 class EvaluationConfig:
     eval_name: str
     run_name: str | None
+    no_full_gt: bool
     ground_truth: GroundTruthConfig
     timing: TimingConfig
     trajectory: TrajectoryConfig
@@ -132,6 +133,7 @@ def load_evaluation_config(path: str | Path) -> EvaluationConfig:
     return EvaluationConfig(
         eval_name=str(cfg.get("eval_name") or config_path.stem),
         run_name=str(cfg["run_name"]) if cfg.get("run_name") else None,
+        no_full_gt=bool(cfg.get("no_full_gt", False)),
         ground_truth=GroundTruthConfig(
             trajectory_txt=_as_path(gt_cfg.get("trajectory_txt")),
             init_pose_csv=_as_path(gt_cfg.get("init_pose_csv")),
@@ -176,6 +178,10 @@ def validate_evaluation_config(resolved: ResolvedRunConfig, evaluation: Evaluati
         problems.append(
             f"Evaluation run_name {evaluation.run_name!r} does not match resolved config run_name {resolved.run_name!r}"
         )
+    if evaluation.ground_truth.lookup_run_name and not resolved.run_name.startswith(evaluation.ground_truth.lookup_run_name):
+        problems.append(
+            f"Evaluation lookup_run_name {evaluation.ground_truth.lookup_run_name!r} does not match resolved config run_name {resolved.run_name!r}"
+        )
 
     if not resolved.log_path.is_file():
         problems.append(f"Estimated poses.txt not found: {resolved.log_path}")
@@ -184,6 +190,11 @@ def validate_evaluation_config(resolved: ResolvedRunConfig, evaluation: Evaluati
 
     if evaluation.ground_truth.trajectory_txt is not None and not evaluation.ground_truth.trajectory_txt.is_file():
         problems.append(f"Ground-truth trajectory not found: {evaluation.ground_truth.trajectory_txt}")
+    if evaluation.ground_truth.trajectory_txt is None and not evaluation.no_full_gt:
+        problems.append(
+            "Evaluation config has no ground_truth.trajectory_txt. "
+            "Use a Floor 1 full-GT config for supervisor-facing metrics, or set no_full_gt: true for init-only/debug runs."
+        )
     if evaluation.ground_truth.init_pose_csv is not None and not evaluation.ground_truth.init_pose_csv.is_file():
         problems.append(f"Initial pose CSV not found: {evaluation.ground_truth.init_pose_csv}")
     if evaluation.floorplan.png_path is not None and not evaluation.floorplan.png_path.is_file():

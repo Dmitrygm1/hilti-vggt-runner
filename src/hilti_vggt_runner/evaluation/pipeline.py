@@ -18,6 +18,7 @@ from .plotting import (
     plot_translation_error_timeseries,
     plot_wall_consistency_overlay,
 )
+from .pointcloud import AlignedPointcloudSummary, write_aligned_pointcloud
 from .poses import EstimatedPoseLoadSummary, load_estimated_pose_sequence, load_init_pose, load_tum_pose_sequence
 from .report import write_markdown_report, write_matched_poses_csv, write_metrics_csv, write_metrics_json
 from .trajectory import SequenceHealth, TrajectoryEvaluation, compute_sequence_health, evaluate_trajectory_modes
@@ -44,6 +45,7 @@ def _collect_plot_paths(artifacts: RunArtifacts) -> dict[str, Path]:
         "rpe_translation_m_vs_index": artifacts.plots_dir / "rpe_translation_m_vs_index.png",
         "rpe_rotation_deg_vs_index": artifacts.plots_dir / "rpe_rotation_deg_vs_index.png",
         "floorplan_overlay": artifacts.plots_dir / "floorplan_overlay.png",
+        "pointcloud_floorplan_overlay": artifacts.plots_dir / "pointcloud_floorplan_overlay.png",
         "wall_consistency_overlay": artifacts.plots_dir / "wall_consistency_overlay.png",
     }
 
@@ -71,6 +73,36 @@ def _assert_single_view_manifest(resolved: ResolvedRunConfig) -> None:
         "Then evaluate using the derived resolved_config.yaml under "
         "<profile_root>/evaluation_inputs/view_XX/."
     )
+
+
+def _write_aligned_pointclouds(
+    resolved: ResolvedRunConfig,
+    artifacts: RunArtifacts,
+    trajectory_evaluations: dict[str, TrajectoryEvaluation],
+    floorplan_evaluation: FloorplanEvaluationResult | None,
+) -> dict[str, AlignedPointcloudSummary]:
+    if not resolved.export_path.is_file():
+        return {}
+
+    transforms = {
+        mode: evaluation_result.transform
+        for mode, evaluation_result in trajectory_evaluations.items()
+        if evaluation_result.transform is not None
+    }
+    if floorplan_evaluation is not None and "init_anchor" not in transforms:
+        transforms["init_anchor"] = floorplan_evaluation.anchor.transform
+
+    summaries: dict[str, AlignedPointcloudSummary] = {}
+    for mode, transform in transforms.items():
+        if transform is None:
+            continue
+        summaries[mode] = write_aligned_pointcloud(
+            mode=mode,
+            source_path=resolved.export_path,
+            output_path=artifacts.aligned_pointcloud_dir / f"aligned_{mode}.ply",
+            transform=transform,
+        )
+    return summaries
 
 
 def run_evaluation(resolved: ResolvedRunConfig, evaluation: EvaluationConfig) -> EvaluationResult:
@@ -156,7 +188,20 @@ def run_evaluation(resolved: ResolvedRunConfig, evaluation: EvaluationConfig) ->
             plot_paths["floorplan_overlay"],
             ground_truth_positions=gt_positions,
         )
+        plot_floorplan_overlay_eval_resolution(
+            floorplan,
+            floorplan_evaluation,
+            plot_paths["pointcloud_floorplan_overlay"],
+            ground_truth_positions=gt_positions,
+        )
         plot_wall_consistency_overlay(floorplan, floorplan_evaluation, plot_paths["wall_consistency_overlay"])
+
+    aligned_pointclouds = _write_aligned_pointclouds(
+        resolved,
+        artifacts,
+        trajectory_evaluations,
+        floorplan_evaluation,
+    )
 
     payload: dict[str, Any] = {
         "run_name": resolved.run_name,
@@ -177,6 +222,20 @@ def run_evaluation(resolved: ResolvedRunConfig, evaluation: EvaluationConfig) ->
         },
         "trajectory": {mode: evaluation_result.metrics for mode, evaluation_result in trajectory_evaluations.items()},
         "floorplan": None if floorplan_evaluation is None else floorplan_evaluation.metrics,
+        "aligned_pointclouds": {
+            mode: {
+                "path": str(summary.output_path),
+                "source_path": str(summary.source_path),
+                "point_count": summary.point_count,
+            }
+            for mode, summary in aligned_pointclouds.items()
+        },
+        "pointcloud_frame_note": {
+            "exported_ply": str(resolved.export_path),
+            "exported_ply_frame": "VGGT reconstruction frame, suitable for raw CloudCompare inspection but not directly comparable to floorplan/map overlays.",
+            "aligned_pointcloud_dir": str(artifacts.aligned_pointcloud_dir),
+            "aligned_pointcloud_frame": "Evaluation map/ground-truth frame for each named alignment transform.",
+        },
     }
 
     write_metrics_json(artifacts.metrics_json_path, payload)
@@ -200,6 +259,11 @@ def run_evaluation(resolved: ResolvedRunConfig, evaluation: EvaluationConfig) ->
         key_metrics["Wall precision"] = _format_metric(floorplan_evaluation.metrics["wall_precision"])
         key_metrics["Wall recall"] = _format_metric(floorplan_evaluation.metrics["wall_recall"])
         key_metrics["Wall distance p95 [m]"] = _format_metric(floorplan_evaluation.metrics["wall_distance_p95_m"])
+        key_metrics["Point evidence source"] = floorplan_evaluation.summary.get("point_evidence_source", "n/a")
+        key_metrics["Point evidence cells"] = floorplan_evaluation.summary.get("point_evidence_cells", "n/a")
+        key_metrics["Point evidence height band [m]"] = f"{evaluation.floorplan.z_min_m:.2f} to {evaluation.floorplan.z_max_m:.2f}"
+        key_metrics["Point evidence min points/cell"] = evaluation.floorplan.min_points_per_cell
+        key_metrics["Point evidence min vertical extent [m]"] = f"{evaluation.floorplan.vertical_extent_min_m:.2f}"
     else:
         caveats.append("Floor-plan consistency evaluation was skipped because floorplan/init-pose inputs were incomplete.")
 
@@ -208,6 +272,9 @@ def run_evaluation(resolved: ResolvedRunConfig, evaluation: EvaluationConfig) ->
 
     if floorplan_evaluation is not None:
         caveats.append("Floor-plan consistency uses the as-planned PNG floorplan, not the authoritative as-built geometry.")
+        caveats.append(
+            "The CloudCompare export PLY is in VGGT's reconstruction frame; floorplan overlays and aligned_*.ply artifacts are transformed into the evaluation map frame."
+        )
         if int(floorplan_evaluation.summary.get("point_evidence_cells", 0)) == 0:
             caveats.append("No usable wall evidence cells were extracted from the reconstruction after map anchoring and height filtering.")
     if resolved.input_type == "mp4":
@@ -228,6 +295,8 @@ def run_evaluation(resolved: ResolvedRunConfig, evaluation: EvaluationConfig) ->
             "input_type": resolved.input_type,
             "estimated_poses_txt": resolved.log_path,
             "frame_manifest": resolved.frame_manifest_path,
+            "original_pointcloud_vggt_frame": resolved.export_path,
+            "aligned_pointcloud_dir": artifacts.aligned_pointcloud_dir,
             "ground_truth": evaluation.ground_truth.trajectory_txt or "not configured",
             "floorplan": evaluation.floorplan.png_path or "not configured",
         },
